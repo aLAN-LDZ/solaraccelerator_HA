@@ -9,6 +9,7 @@ from typing import Any
 import aiohttp
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -99,6 +100,7 @@ class SolarAcceleratorStatusSensor(SolarAcceleratorSensorBase):
 
     _attr_icon = "mdi:cloud-check"
     _attr_translation_key = "connection_status"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
@@ -126,6 +128,7 @@ class SolarAcceleratorLastSentSensor(SolarAcceleratorSensorBase):
 
     _attr_icon = "mdi:clock-outline"
     _attr_translation_key = "last_sent"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
@@ -145,6 +148,7 @@ class SolarAcceleratorNextScheduledSensor(SolarAcceleratorSensorBase):
 
     _attr_icon = "mdi:clock-fast"
     _attr_translation_key = "next_scheduled"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
@@ -165,6 +169,7 @@ class SolarAcceleratorEntitiesCountSensor(SolarAcceleratorSensorBase):
     _attr_icon = "mdi:counter"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_translation_key = "entities_sent"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
