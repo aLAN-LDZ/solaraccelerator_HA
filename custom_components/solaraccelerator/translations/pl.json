@@ -6,13 +6,28 @@
         "description": "Wprowadź klucz API wygenerowany w panelu SolarAccelerator.\n\nKlucz znajdziesz w: Integracje → Inwertery → Home Assistant API (Push)",
         "data": {
           "api_key": "Klucz API",
-          "server_url": "Adres serwera",
-          "send_interval": "Interwał wysyłania (sekundy)"
+          "server_url": "Adres serwera"
         },
         "data_description": {
           "api_key": "Klucz w formacie sa_haapi_...",
-          "server_url": "Domyślnie: https://solaraccelerator.cloud",
-          "send_interval": "Minimalnie 60 sekund (zalecane: 60)"
+          "server_url": "Domyślnie: https://solaraccelerator.cloud"
+        }
+      },
+      "choose_mode": {
+        "title": "Wybierz tryb konfiguracji",
+        "description": "Wybierz sposób mapowania encji inwertera.\n\n**Solarman** - automatyczne mapowanie dla integracji Solarman. Wystarczy podać prefix encji.\n\n**Ręczne** - ręczny wybór każdej encji z Home Assistant.",
+        "data": {
+          "config_mode": "Tryb konfiguracji"
+        }
+      },
+      "solarman_prefix": {
+        "title": "Solarman - Prefix encji",
+        "description": "Podaj prefix używany w integracji Solarman.\n\nPrzykład: jeśli Twoje encje nazywają się `sensor.deye_pv1_power`, to prefix to `deye`.\n\nDane będą wysyłane automatycznie o każdej pełnej godzinie.",
+        "data": {
+          "solarman_prefix": "Prefix encji"
+        },
+        "data_description": {
+          "solarman_prefix": "np. deye, solarman, inverter"
         }
       },
       "entities_pv": {
@@ -89,7 +104,7 @@
       },
       "entities_temp": {
         "title": "Mapowanie encji - Temperatury",
-        "description": "Wybierz encje z Home Assistant odpowiadające danym temperatur.",
+        "description": "Wybierz encje z Home Assistant odpowiadające danym temperatur.\n\nDane będą wysyłane automatycznie o każdej pełnej godzinie.",
         "data": {
           "radiator_temp": "Temperatura radiatora (°C)",
           "dc_transformer_temp": "Temperatura transformatora DC (°C)"
@@ -101,28 +116,13 @@
       "invalid_api_key_format": "Klucz API musi zaczynać się od 'sa_haapi_' i mieć minimum 40 znaków",
       "cannot_connect": "Nie można połączyć się z serwerem",
       "invalid_url": "Nieprawidłowy adres URL",
-      "invalid_interval": "Interwał musi wynosić co najmniej 60 sekund",
       "entity_required": "To pole jest wymagane",
+      "prefix_required": "Prefix jest wymagany",
+      "invalid_prefix": "Nieprawidłowy prefix (tylko litery, cyfry i podkreślenia)",
       "unknown": "Nieznany błąd"
     },
     "abort": {
       "no_entities": "Brak dostępnych encji w Home Assistant"
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Opcje SolarAccelerator",
-        "data": {
-          "send_interval": "Interwał wysyłania (sekundy)"
-        },
-        "data_description": {
-          "send_interval": "Minimalnie 60 sekund"
-        }
-      }
-    },
-    "error": {
-      "invalid_interval": "Interwał musi wynosić co najmniej 60 sekund"
     }
   },
   "entity": {
@@ -140,8 +140,16 @@
       "last_sent": {
         "name": "Ostatnie wysłanie"
       },
+      "next_scheduled": {
+        "name": "Następne wysłanie"
+      },
       "entities_sent": {
         "name": "Wysłane encje"
+      }
+    },
+    "button": {
+      "force_send": {
+        "name": "Wymuś wysłanie danych"
       }
     }
   }

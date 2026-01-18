@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
@@ -13,13 +13,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
-from homeassistant.util.dt import utcnow
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
     CONF_API_KEY,
     CONF_SERVER_URL,
-    CONF_SEND_INTERVAL,
     CONF_ENTITY_MAPPING,
     API_PUSH_ENDPOINT,
     ENTITY_KEYS,
@@ -37,19 +36,17 @@ async def async_setup_entry(
 
     coordinator_data = hass.data[DOMAIN][entry.entry_id]
 
-    # Add diagnostic sensors
     async_add_entities([
         SolarAcceleratorStatusSensor(hass, entry, coordinator_data),
         SolarAcceleratorLastSentSensor(hass, entry, coordinator_data),
+        SolarAcceleratorNextScheduledSensor(hass, entry, coordinator_data),
         SolarAcceleratorEntitiesCountSensor(hass, entry, coordinator_data),
     ])
 
-    # Start periodic data sending task
+    # Start hourly data sending task
     task = hass.async_create_task(
-        async_send_data_periodically(hass, entry, coordinator_data)
+        async_send_data_hourly(hass, entry, coordinator_data)
     )
-
-    # Store task reference for cleanup
     coordinator_data["_task"] = task
 
 
@@ -107,7 +104,6 @@ class SolarAcceleratorStatusSensor(SolarAcceleratorSensorBase):
         """Return extra state attributes."""
         return {
             "server_url": self.coordinator_data.get(CONF_SERVER_URL),
-            "send_interval": self.coordinator_data.get(CONF_SEND_INTERVAL),
             "last_response": self.coordinator_data.get("last_response"),
         }
 
@@ -129,6 +125,25 @@ class SolarAcceleratorLastSentSensor(SolarAcceleratorSensorBase):
     def native_value(self) -> str | None:
         """Return the state."""
         return self.coordinator_data.get("last_sent")
+
+
+class SolarAcceleratorNextScheduledSensor(SolarAcceleratorSensorBase):
+    """Sensor for next scheduled send time."""
+
+    _attr_icon = "mdi:clock-fast"
+    _attr_translation_key = "next_scheduled"
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
+    ) -> None:
+        """Initialize."""
+        super().__init__(hass, entry, coordinator_data, "next_scheduled")
+        self._attr_name = "Następne wysłanie"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the state."""
+        return self.coordinator_data.get("next_scheduled")
 
 
 class SolarAcceleratorEntitiesCountSensor(SolarAcceleratorSensorBase):
@@ -156,18 +171,14 @@ def convert_value(value: str | None, entity_key: str) -> float | int | bool | st
     if value is None or value in ("unknown", "unavailable", ""):
         return 0
 
-    # Boolean for grid_connected_status
     if entity_key == "grid_connected_status":
         return value.lower() in ("on", "true", "1", "connected")
 
-    # Status field - keep as string
     if entity_key == "inverter_status":
         return value
 
-    # Numeric values
     try:
         float_val = float(value)
-        # Return int if it's a whole number
         if float_val.is_integer():
             return int(float_val)
         return float_val
@@ -175,13 +186,25 @@ def convert_value(value: str | None, entity_key: str) -> float | int | bool | st
         return 0
 
 
-async def async_send_data_periodically(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    coordinator_data: dict[str, Any],
-) -> None:
-    """Send data to server periodically."""
+def get_next_full_hour() -> datetime:
+    """Get the next full hour timestamp."""
+    now = dt_util.now()
+    next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    return next_hour
 
+
+def get_seconds_until_next_hour() -> float:
+    """Get seconds until the next full hour."""
+    now = dt_util.now()
+    next_hour = get_next_full_hour()
+    return (next_hour - now).total_seconds()
+
+
+async def async_send_data(
+    hass: HomeAssistant,
+    coordinator_data: dict[str, Any],
+) -> bool:
+    """Send data to server. Returns True on success."""
     api_key = coordinator_data.get(CONF_API_KEY)
     server_url = coordinator_data.get(CONF_SERVER_URL)
     entity_mapping = coordinator_data.get(CONF_ENTITY_MAPPING, {})
@@ -189,80 +212,105 @@ async def async_send_data_periodically(
     session = async_get_clientsession(hass)
     endpoint = f"{server_url}{API_PUSH_ENDPOINT}"
 
-    while True:
-        try:
-            # Get current send_interval (may change from options)
-            send_interval = max(60, coordinator_data.get(CONF_SEND_INTERVAL, 60))
+    try:
+        entities_data = {}
+        entities_count = 0
 
-            # Wait for the interval
-            await asyncio.sleep(send_interval)
-
-            # Gather current state of mapped entities
-            entities_data = {}
-            entities_count = 0
-
-            for entity_key in ENTITY_KEYS:
-                ha_entity_id = entity_mapping.get(entity_key)
-                if ha_entity_id:
-                    state = hass.states.get(ha_entity_id)
-                    if state:
-                        value = convert_value(state.state, entity_key)
-                        entities_data[entity_key] = value
-                        entities_count += 1
-                    else:
-                        entities_data[entity_key] = 0
+        for entity_key in ENTITY_KEYS:
+            ha_entity_id = entity_mapping.get(entity_key)
+            if ha_entity_id:
+                state = hass.states.get(ha_entity_id)
+                if state:
+                    value = convert_value(state.state, entity_key)
+                    entities_data[entity_key] = value
+                    entities_count += 1
                 else:
                     entities_data[entity_key] = 0
+            else:
+                entities_data[entity_key] = 0
 
-            # Build payload
-            payload = {
-                "timestamp": utcnow().isoformat(),
-                "entities": entities_data,
-            }
+        payload = {
+            "timestamp": dt_util.utcnow().isoformat(),
+            "entities": entities_data,
+        }
 
-            # Send to server
-            async with session.post(
-                endpoint,
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as resp:
-                response_text = await resp.text()
+        async with session.post(
+            endpoint,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            response_text = await resp.text()
 
-                if resp.status == 200:
-                    coordinator_data["last_sent"] = utcnow().isoformat()
-                    coordinator_data["connection_status"] = "connected"
-                    coordinator_data["entities_sent"] = entities_count
-                    coordinator_data["last_response"] = "OK"
-                    _LOGGER.debug(
-                        "Data sent successfully to %s: %d entities",
-                        endpoint,
-                        entities_count,
-                    )
-                elif resp.status == 401:
-                    coordinator_data["connection_status"] = "auth_error"
-                    coordinator_data["last_response"] = "Nieprawidłowy klucz API"
-                    _LOGGER.error("Authentication failed: invalid API key")
-                else:
-                    coordinator_data["connection_status"] = "error"
-                    coordinator_data["last_response"] = f"HTTP {resp.status}: {response_text[:100]}"
-                    _LOGGER.error(
-                        "Failed to send data: %s - %s",
-                        resp.status,
-                        response_text,
-                    )
+            if resp.status == 200:
+                coordinator_data["last_sent"] = dt_util.now().strftime("%Y-%m-%d %H:%M:%S")
+                coordinator_data["connection_status"] = "connected"
+                coordinator_data["entities_sent"] = entities_count
+                coordinator_data["last_response"] = "OK"
+                _LOGGER.info(
+                    "Data sent successfully to %s: %d entities",
+                    endpoint,
+                    entities_count,
+                )
+                return True
+            elif resp.status == 401:
+                coordinator_data["connection_status"] = "auth_error"
+                coordinator_data["last_response"] = "Nieprawidłowy klucz API"
+                _LOGGER.error("Authentication failed: invalid API key")
+            else:
+                coordinator_data["connection_status"] = "error"
+                coordinator_data["last_response"] = f"HTTP {resp.status}: {response_text[:100]}"
+                _LOGGER.error(
+                    "Failed to send data: %s - %s",
+                    resp.status,
+                    response_text,
+                )
+
+    except aiohttp.ClientError as e:
+        coordinator_data["connection_status"] = "disconnected"
+        coordinator_data["last_response"] = f"Connection error: {str(e)[:50]}"
+        _LOGGER.error("Connection error: %s", e)
+    except Exception as e:
+        coordinator_data["connection_status"] = "error"
+        coordinator_data["last_response"] = f"Error: {str(e)[:50]}"
+        _LOGGER.exception("Error sending data: %s", e)
+
+    return False
+
+
+async def async_send_data_hourly(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinator_data: dict[str, Any],
+) -> None:
+    """Send data to server at every full hour."""
+
+    while True:
+        try:
+            # Calculate time until next full hour
+            seconds_to_wait = get_seconds_until_next_hour()
+            next_scheduled = get_next_full_hour()
+            coordinator_data["next_scheduled"] = next_scheduled.strftime("%Y-%m-%d %H:%M:%S")
+
+            _LOGGER.debug(
+                "Next data send scheduled for %s (in %.0f seconds)",
+                next_scheduled,
+                seconds_to_wait,
+            )
+
+            # Wait until next full hour
+            await asyncio.sleep(seconds_to_wait)
+
+            # Send data
+            await async_send_data(hass, coordinator_data)
 
         except asyncio.CancelledError:
-            _LOGGER.debug("Data sending task cancelled")
+            _LOGGER.debug("Hourly data sending task cancelled")
             break
-        except aiohttp.ClientError as e:
-            coordinator_data["connection_status"] = "disconnected"
-            coordinator_data["last_response"] = f"Connection error: {str(e)[:50]}"
-            _LOGGER.error("Connection error: %s", e)
         except Exception as e:
-            coordinator_data["connection_status"] = "error"
-            coordinator_data["last_response"] = f"Error: {str(e)[:50]}"
-            _LOGGER.exception("Error sending data: %s", e)
+            _LOGGER.exception("Error in hourly send task: %s", e)
+            # Wait a minute before retrying
+            await asyncio.sleep(60)

@@ -6,13 +6,28 @@
         "description": "Enter the API key generated in the SolarAccelerator dashboard.\n\nFind your key at: Integrations → Inverters → Home Assistant API (Push)",
         "data": {
           "api_key": "API Key",
-          "server_url": "Server URL",
-          "send_interval": "Send interval (seconds)"
+          "server_url": "Server URL"
         },
         "data_description": {
           "api_key": "Key in format sa_haapi_...",
-          "server_url": "Default: https://solaraccelerator.cloud",
-          "send_interval": "Minimum 60 seconds (recommended: 60)"
+          "server_url": "Default: https://solaraccelerator.cloud"
+        }
+      },
+      "choose_mode": {
+        "title": "Choose Configuration Mode",
+        "description": "Choose how to map inverter entities.\n\n**Solarman** - automatic mapping for Solarman integration. Just provide the entity prefix.\n\n**Manual** - manually select each entity from Home Assistant.",
+        "data": {
+          "config_mode": "Configuration mode"
+        }
+      },
+      "solarman_prefix": {
+        "title": "Solarman - Entity Prefix",
+        "description": "Enter the prefix used in Solarman integration.\n\nExample: if your entities are named `sensor.deye_pv1_power`, the prefix is `deye`.\n\nData will be sent automatically at every full hour.",
+        "data": {
+          "solarman_prefix": "Entity prefix"
+        },
+        "data_description": {
+          "solarman_prefix": "e.g. deye, solarman, inverter"
         }
       },
       "entities_pv": {
@@ -89,7 +104,7 @@
       },
       "entities_temp": {
         "title": "Entity Mapping - Temperatures",
-        "description": "Select Home Assistant entities corresponding to temperature data.",
+        "description": "Select Home Assistant entities corresponding to temperature data.\n\nData will be sent automatically at every full hour.",
         "data": {
           "radiator_temp": "Radiator temperature (°C)",
           "dc_transformer_temp": "DC transformer temperature (°C)"
@@ -101,28 +116,13 @@
       "invalid_api_key_format": "API key must start with 'sa_haapi_' and be at least 40 characters",
       "cannot_connect": "Cannot connect to server",
       "invalid_url": "Invalid URL",
-      "invalid_interval": "Interval must be at least 60 seconds",
       "entity_required": "This field is required",
+      "prefix_required": "Prefix is required",
+      "invalid_prefix": "Invalid prefix (only letters, numbers and underscores)",
       "unknown": "Unknown error"
     },
     "abort": {
       "no_entities": "No entities available in Home Assistant"
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "SolarAccelerator Options",
-        "data": {
-          "send_interval": "Send interval (seconds)"
-        },
-        "data_description": {
-          "send_interval": "Minimum 60 seconds"
-        }
-      }
-    },
-    "error": {
-      "invalid_interval": "Interval must be at least 60 seconds"
     }
   },
   "entity": {
@@ -140,8 +140,16 @@
       "last_sent": {
         "name": "Last Sent"
       },
+      "next_scheduled": {
+        "name": "Next Scheduled"
+      },
       "entities_sent": {
         "name": "Entities Sent"
+      }
+    },
+    "button": {
+      "force_send": {
+        "name": "Force Send Data"
       }
     }
   }

@@ -9,37 +9,37 @@ import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     EntitySelector,
     EntitySelectorConfig,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
-    NumberSelector,
-    NumberSelectorConfig,
-    NumberSelectorMode,
 )
 
 from .const import (
     DOMAIN,
     CONF_API_KEY,
     CONF_SERVER_URL,
-    CONF_SEND_INTERVAL,
     CONF_ENTITY_MAPPING,
+    CONF_CONFIG_MODE,
+    CONF_SOLARMAN_PREFIX,
+    CONFIG_MODE_SOLARMAN,
+    CONFIG_MODE_MANUAL,
     DEFAULT_SERVER_URL,
-    DEFAULT_SEND_INTERVAL,
     API_PUSH_ENDPOINT,
     REQUIRED_ENTITIES,
     ENTITY_CATEGORIES,
+    build_solarman_entity_mapping,
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-# Group entities by category for multi-step flow
-ENTITY_STEPS = ["pv", "battery", "inverter", "grid", "load", "temp"]
 
 
 async def async_validate_api_key(
@@ -55,7 +55,6 @@ async def async_validate_api_key(
 
         _LOGGER.debug("Validating API key at: %s", endpoint)
 
-        # Send a minimal test request to validate the API key
         async with session.post(
             endpoint,
             json={
@@ -110,9 +109,9 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Initialize the config flow."""
         self.api_key: str = ""
         self.server_url: str = DEFAULT_SERVER_URL
-        self.send_interval: int = DEFAULT_SEND_INTERVAL
+        self.config_mode: str = ""
+        self.solarman_prefix: str = ""
         self.entity_mapping: dict[str, str] = {}
-        self.current_step_index: int = 0
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -123,7 +122,6 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             api_key = user_input.get(CONF_API_KEY, "").strip()
             server_url = user_input.get(CONF_SERVER_URL, DEFAULT_SERVER_URL).strip()
-            send_interval = user_input.get(CONF_SEND_INTERVAL, DEFAULT_SEND_INTERVAL)
 
             # Validate API key format
             if not api_key.startswith("sa_haapi_"):
@@ -135,10 +133,6 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not server_url.startswith(("http://", "https://")):
                 errors[CONF_SERVER_URL] = "invalid_url"
 
-            # Validate interval
-            if send_interval < 60:
-                errors[CONF_SEND_INTERVAL] = "invalid_interval"
-
             if not errors:
                 # Validate API key with server
                 result = await async_validate_api_key(self.hass, api_key, server_url)
@@ -146,9 +140,7 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if result["success"]:
                     self.api_key = api_key
                     self.server_url = server_url.rstrip("/")
-                    self.send_interval = send_interval
-                    self.current_step_index = 0
-                    return await self.async_step_entities_pv()
+                    return await self.async_step_choose_mode()
                 else:
                     errors["base"] = result.get("error", "cannot_connect")
 
@@ -159,13 +151,69 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_SERVER_URL, default=DEFAULT_SERVER_URL): TextSelector(
                 TextSelectorConfig(type=TextSelectorType.URL)
             ),
-            vol.Required(CONF_SEND_INTERVAL, default=DEFAULT_SEND_INTERVAL): NumberSelector(
-                NumberSelectorConfig(min=60, max=3600, step=1, mode=NumberSelectorMode.BOX)
-            ),
         })
 
         return self.async_show_form(
             step_id="user",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_choose_mode(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle configuration mode selection."""
+        if user_input is not None:
+            self.config_mode = user_input.get(CONF_CONFIG_MODE, CONFIG_MODE_MANUAL)
+
+            if self.config_mode == CONFIG_MODE_SOLARMAN:
+                return await self.async_step_solarman_prefix()
+            else:
+                return await self.async_step_entities_pv()
+
+        schema = vol.Schema({
+            vol.Required(CONF_CONFIG_MODE, default=CONFIG_MODE_SOLARMAN): SelectSelector(
+                SelectSelectorConfig(
+                    options=[
+                        {"value": CONFIG_MODE_SOLARMAN, "label": "Solarman (automatyczne mapowanie)"},
+                        {"value": CONFIG_MODE_MANUAL, "label": "Ręczne mapowanie encji"},
+                    ],
+                    mode=SelectSelectorMode.LIST,
+                )
+            ),
+        })
+
+        return self.async_show_form(
+            step_id="choose_mode",
+            data_schema=schema,
+        )
+
+    async def async_step_solarman_prefix(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle Solarman prefix input."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            prefix = user_input.get(CONF_SOLARMAN_PREFIX, "").strip().lower()
+
+            if not prefix:
+                errors[CONF_SOLARMAN_PREFIX] = "prefix_required"
+            elif " " in prefix or not prefix.replace("_", "").isalnum():
+                errors[CONF_SOLARMAN_PREFIX] = "invalid_prefix"
+            else:
+                self.solarman_prefix = prefix
+                self.entity_mapping = build_solarman_entity_mapping(prefix)
+                return self._create_entry()
+
+        schema = vol.Schema({
+            vol.Required(CONF_SOLARMAN_PREFIX): TextSelector(
+                TextSelectorConfig(type=TextSelectorType.TEXT)
+            ),
+        })
+
+        return self.async_show_form(
+            step_id="solarman_prefix",
             data_schema=schema,
             errors=errors,
         )
@@ -177,7 +225,6 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Save mappings for this category
             category_entities = get_entities_for_category(category)
             all_filled = True
 
@@ -193,17 +240,13 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if next_step:
                     return await getattr(self, f"async_step_{next_step}")()
                 else:
-                    # All steps complete - create entry
                     return self._create_entry()
 
-        # Build schema for this category
         category_entities = get_entities_for_category(category)
         schema_dict = {}
 
         for entity_key, description, unit, _ in category_entities:
             default_value = self.entity_mapping.get(entity_key, vol.UNDEFINED)
-            field_label = f"{entity_key}"
-
             schema_dict[vol.Required(entity_key, default=default_value)] = EntitySelector(
                 EntitySelectorConfig(domain=["sensor", "binary_sensor"])
             )
@@ -255,64 +298,17 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def _create_entry(self) -> FlowResult:
         """Create the config entry."""
-        # Generate a unique ID based on API key prefix
-        api_key_suffix = self.api_key[-8:] if len(self.api_key) >= 8 else self.api_key
-        unique_id = f"solaraccelerator_{api_key_suffix}"
+        title = "SolarAccelerator"
+        if self.config_mode == CONFIG_MODE_SOLARMAN:
+            title = f"SolarAccelerator ({self.solarman_prefix})"
 
         return self.async_create_entry(
-            title=f"SolarAccelerator",
+            title=title,
             data={
                 CONF_API_KEY: self.api_key,
                 CONF_SERVER_URL: self.server_url,
-                CONF_SEND_INTERVAL: self.send_interval,
+                CONF_CONFIG_MODE: self.config_mode,
+                CONF_SOLARMAN_PREFIX: self.solarman_prefix,
                 CONF_ENTITY_MAPPING: self.entity_mapping,
             },
-        )
-
-    @staticmethod
-    @callback
-    def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
-    ) -> config_entries.OptionsFlow:
-        """Create the options flow."""
-        return SolarAcceleratorOptionsFlow()
-
-
-class SolarAcceleratorOptionsFlow(config_entries.OptionsFlow):
-    """Handle options flow for Solar Accelerator."""
-
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Manage the options."""
-        errors: dict[str, str] = {}
-
-        if user_input is not None:
-            send_interval = user_input.get(CONF_SEND_INTERVAL, DEFAULT_SEND_INTERVAL)
-
-            if send_interval < 60:
-                errors[CONF_SEND_INTERVAL] = "invalid_interval"
-            else:
-                return self.async_create_entry(
-                    title="",
-                    data={
-                        CONF_SEND_INTERVAL: send_interval,
-                    },
-                )
-
-        current_interval = self.config_entry.options.get(
-            CONF_SEND_INTERVAL,
-            self.config_entry.data.get(CONF_SEND_INTERVAL, DEFAULT_SEND_INTERVAL),
-        )
-
-        schema = vol.Schema({
-            vol.Required(CONF_SEND_INTERVAL, default=current_interval): NumberSelector(
-                NumberSelectorConfig(min=60, max=3600, step=1, mode=NumberSelectorMode.BOX)
-            ),
-        })
-
-        return self.async_show_form(
-            step_id="init",
-            data_schema=schema,
-            errors=errors,
         )

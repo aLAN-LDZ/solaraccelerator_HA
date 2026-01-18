@@ -5,18 +5,23 @@ DOMAIN = "solaraccelerator"
 # Config flow
 CONF_API_KEY = "api_key"
 CONF_SERVER_URL = "server_url"
-CONF_SEND_INTERVAL = "send_interval"
 CONF_ENTITY_MAPPING = "entity_mapping"
+CONF_CONFIG_MODE = "config_mode"
+CONF_SOLARMAN_PREFIX = "solarman_prefix"
+
+# Configuration modes
+CONFIG_MODE_SOLARMAN = "solarman"
+CONFIG_MODE_MANUAL = "manual"
 
 # Default values
 DEFAULT_SERVER_URL = "https://solaraccelerator.cloud"
-DEFAULT_SEND_INTERVAL = 60  # 1 minute in seconds
 
 # Sensor attributes
 ATTR_LAST_SENT = "last_sent"
 ATTR_LAST_RECEIVED = "last_received"
 ATTR_CONNECTION_STATUS = "connection_status"
 ATTR_ENTITIES_COUNT = "entities_count"
+ATTR_NEXT_SCHEDULED = "next_scheduled"
 
 # API endpoint
 API_PUSH_ENDPOINT = "/api/push/homeassistant"
@@ -87,3 +92,47 @@ ENTITY_CATEGORIES = {
     "load": "Obciążenie",
     "temp": "Temperatury",
 }
+
+
+def build_solarman_entity_mapping(prefix: str) -> dict[str, str]:
+    """Build entity mapping for Solarman integration based on prefix."""
+    return {
+        "day_pv_energy": f"sensor.{prefix}_today_production",
+        "pv1_power": f"sensor.{prefix}_pv1_power",
+        "pv2_power": f"sensor.{prefix}_pv2_power",
+        "pv1_voltage": f"sensor.{prefix}_pv1_voltage",
+        "pv2_voltage": f"sensor.{prefix}_pv2_voltage",
+        "pv1_current": f"sensor.{prefix}_pv1_current",
+        "pv2_current": f"sensor.{prefix}_pv2_current",
+        "total_pv_generation": f"sensor.{prefix}_total_production",
+        "day_battery_discharge": f"sensor.{prefix}_today_battery_discharge",
+        "day_battery_charge": f"sensor.{prefix}_today_battery_charge",
+        "battery_power": f"sensor.{prefix}_battery_power",
+        "battery_current": f"sensor.{prefix}_battery_current",
+        "battery_temp": f"sensor.{prefix}_battery_temperature",
+        "battery_voltage": f"sensor.{prefix}_battery_voltage",
+        "battery_soc": f"sensor.{prefix}_battery",
+        "battery_soh": f"sensor.{prefix}_battery_soh",
+        "inverter_status": f"sensor.{prefix}_device_relay",
+        "inverter_voltage_l1": f"sensor.{prefix}_grid_l1_voltage",
+        "inverter_voltage_l2": f"sensor.{prefix}_grid_l2_voltage",
+        "inverter_voltage_l3": f"sensor.{prefix}_grid_l3_voltage",
+        "inverter_current_l1": f"sensor.{prefix}_internal_ct1_current",
+        "inverter_current_l2": f"sensor.{prefix}_internal_ct2_current",
+        "inverter_current_l3": f"sensor.{prefix}_internal_ct3_current",
+        "inverter_power": f"sensor.{prefix}_internal_power",
+        "grid_power": f"sensor.{prefix}_grid_power",
+        "grid_ct_power_l1": f"sensor.{prefix}_grid_l1_power",
+        "grid_ct_power_l2": f"sensor.{prefix}_grid_l2_power",
+        "grid_ct_power_l3": f"sensor.{prefix}_grid_l3_power",
+        "day_grid_import": f"sensor.{prefix}_today_energy_import",
+        "day_grid_export": f"sensor.{prefix}_today_energy_export",
+        "grid_connected_status": f"binary_sensor.{prefix}_grid",
+        "day_load_energy": f"sensor.{prefix}_today_load_consumption",
+        "load_power_l1": f"sensor.{prefix}_load_l1_power",
+        "load_power_l2": f"sensor.{prefix}_load_l2_power",
+        "load_power_l3": f"sensor.{prefix}_load_l3_power",
+        "load_frequency": f"sensor.{prefix}_grid_frequency",
+        "radiator_temp": f"sensor.{prefix}_temperature",
+        "dc_transformer_temp": f"sensor.{prefix}_dc_temperature",
+    }
