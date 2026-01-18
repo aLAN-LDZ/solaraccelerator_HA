@@ -275,18 +275,11 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
-        return SolarAcceleratorOptionsFlow(config_entry)
+        return SolarAcceleratorOptionsFlow()
 
 
 class SolarAcceleratorOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for Solar Accelerator."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-        self.entity_mapping: dict[str, str] = dict(
-            config_entry.data.get(CONF_ENTITY_MAPPING, {})
-        )
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
