@@ -24,7 +24,7 @@ Integracja pozwala wysyłać dane z inwertera (przez Home Assistant) do serwisu 
 
 1. Zaloguj się do panelu SolarAccelerator
 2. Przejdź do **Integracje → Inwertery**
-3. W sekcji **Home Assistant API (Push)** kliknij **Wygeneruj klucz API**
+3. W sekcji **Home Assistant** kliknij **Wygeneruj klucz API**
 4. **Skopiuj i zapisz klucz** - nie będzie można go ponownie wyświetlić!
 
 Klucz ma format: `sa_haapi_` + 32 znaki
@@ -36,7 +36,6 @@ Klucz ma format: `sa_haapi_` + 32 znaki
 3. Wprowadź:
    - **Klucz API**: Twój klucz wygenerowany w panelu SolarAccelerator
    - **Adres serwera**: `https://solaraccelerator.cloud` (domyślnie)
-   - **Interwał wysyłania**: Jak często wysyłać dane (sekundy, minimum 60)
 
 4. Po weryfikacji klucza API przejdziesz przez 6 kroków mapowania encji:
    - **PV**: 8 encji (moc, napięcie, prąd stringów PV, dzienna produkcja)
@@ -46,7 +45,7 @@ Klucz ma format: `sa_haapi_` + 32 znaki
    - **Obciążenie**: 5 encji (zużycie dzienne, moc L1-L3, częstotliwość)
    - **Temperatury**: 2 encje (radiator, transformator DC)
 
-5. Gotowe! Integracja zacznie wysyłać dane zgodnie z ustawionym interwałem.
+5. Gotowe! Integracja zacznie wysyłać dane automatycznie o każdej pełnej godzinie.
 
 ## Obsługiwane encje (36 sensorów)
 
@@ -137,8 +136,15 @@ Integracja tworzy urządzenie "SolarAccelerator" z następującymi sensorami:
 
 ## Format API
 
+### Test połączenia
 ```
-POST https://solaraccelerator.cloud/api/push/homeassistant
+GET https://solaraccelerator.cloud/api/homeassistant/test-connection
+Authorization: Bearer sa_haapi_...
+```
+
+### Wysyłanie danych
+```
+POST https://solaraccelerator.cloud/api/homeassistant/send-data
 Authorization: Bearer sa_haapi_...
 Content-Type: application/json
 
@@ -154,14 +160,6 @@ Content-Type: application/json
   }
 }
 ```
-
-## Opcje
-
-Po skonfigurowaniu integracji możesz zmienić interwał wysyłania:
-
-1. Przejdź do **Ustawienia → Urządzenia i usługi**
-2. Znajdź "SolarAccelerator" i kliknij **Konfiguruj**
-3. Zmień interwał wysyłania
 
 ## Rozwiązywanie problemów
 

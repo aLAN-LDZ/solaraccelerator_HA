@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "SolarAccelerator - Klucz API",
-        "description": "Wprowadź klucz API wygenerowany w panelu SolarAccelerator.\n\nKlucz znajdziesz w: Integracje → Inwertery → Home Assistant API (Push)",
+        "description": "Wprowadź klucz API wygenerowany w panelu SolarAccelerator.\n\nKlucz znajdziesz w: Integracje → Inwertery → Home Assistant",
         "data": {
           "api_key": "Klucz API",
           "server_url": "Adres serwera"

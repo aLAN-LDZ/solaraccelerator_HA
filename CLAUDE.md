@@ -20,15 +20,17 @@ custom_components/solaraccelerator/
 ```
 
 **Data Flow:**
-1. Config flow validates API key against `solaraccelerator.cloud/api/push/homeassistant`
+1. Config flow validates API key via GET `/api/homeassistant/test-connection`
 2. User maps 36 HA entities to SolarAccelerator fields (or uses Solarman auto-mapping)
-3. Background task sends JSON payload every full hour
+3. Background task sends JSON payload every full hour via POST `/api/homeassistant/send-data`
 4. Force send button allows manual data push
 
 **Key Constants:**
 - `REQUIRED_ENTITIES` in const.py defines all 36 sensor mappings (PV, battery, inverter, grid, load, temp)
 - `build_solarman_entity_mapping()` generates entity IDs from Solarman prefix
-- API endpoint: `API_PUSH_ENDPOINT = "/api/push/homeassistant"`
+- API endpoints:
+  - `API_TEST_CONNECTION_ENDPOINT = "/api/homeassistant/test-connection"`
+  - `API_SEND_DATA_ENDPOINT = "/api/homeassistant/send-data"`
 
 ## Development Notes
 

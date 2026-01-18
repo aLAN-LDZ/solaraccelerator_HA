@@ -57,7 +57,7 @@ class SolarAcceleratorForceSendButton(ButtonEntity):
             identifiers={(DOMAIN, self.entry.entry_id)},
             name="SolarAccelerator",
             manufacturer="SolarAccelerator",
-            model="Home Assistant Push API",
+            model="Home Assistant Integration",
             entry_type=DeviceEntryType.SERVICE,
         )
 

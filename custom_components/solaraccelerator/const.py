@@ -23,8 +23,9 @@ ATTR_CONNECTION_STATUS = "connection_status"
 ATTR_ENTITIES_COUNT = "entities_count"
 ATTR_NEXT_SCHEDULED = "next_scheduled"
 
-# API endpoint
-API_PUSH_ENDPOINT = "/api/push/homeassistant"
+# API endpoints
+API_TEST_CONNECTION_ENDPOINT = "/api/homeassistant/test-connection"
+API_SEND_DATA_ENDPOINT = "/api/homeassistant/send-data"
 
 # All 36 required entities for SolarAccelerator API
 # Format: (key, description, unit, category)

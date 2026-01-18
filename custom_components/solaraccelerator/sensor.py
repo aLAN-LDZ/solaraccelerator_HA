@@ -20,7 +20,7 @@ from .const import (
     CONF_API_KEY,
     CONF_SERVER_URL,
     CONF_ENTITY_MAPPING,
-    API_PUSH_ENDPOINT,
+    API_SEND_DATA_ENDPOINT,
     ENTITY_KEYS,
 )
 
@@ -76,7 +76,7 @@ class SolarAcceleratorSensorBase(SensorEntity):
             identifiers={(DOMAIN, self.entry.entry_id)},
             name="SolarAccelerator",
             manufacturer="SolarAccelerator",
-            model="Home Assistant Push API",
+            model="Home Assistant Integration",
             entry_type=DeviceEntryType.SERVICE,
         )
 
@@ -210,7 +210,7 @@ async def async_send_data(
     entity_mapping = coordinator_data.get(CONF_ENTITY_MAPPING, {})
 
     session = async_get_clientsession(hass)
-    endpoint = f"{server_url}{API_PUSH_ENDPOINT}"
+    endpoint = f"{server_url}{API_SEND_DATA_ENDPOINT}"
 
     try:
         entities_data = {}

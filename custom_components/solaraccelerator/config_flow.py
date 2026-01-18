@@ -33,7 +33,7 @@ from .const import (
     CONFIG_MODE_SOLARMAN,
     CONFIG_MODE_MANUAL,
     DEFAULT_SERVER_URL,
-    API_PUSH_ENDPOINT,
+    API_TEST_CONNECTION_ENDPOINT,
     REQUIRED_ENTITIES,
     ENTITY_CATEGORIES,
     build_solarman_entity_mapping,
@@ -51,7 +51,7 @@ async def async_validate_api_key(
     try:
         session = async_get_clientsession(hass)
         server_url = server_url.rstrip("/")
-        endpoint = f"{server_url}{API_PUSH_ENDPOINT}"
+        endpoint = f"{server_url}{API_TEST_CONNECTION_ENDPOINT}"
 
         _LOGGER.debug("Testing connection at: %s", endpoint)
 

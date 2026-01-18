@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "SolarAccelerator - API Key",
-        "description": "Enter the API key generated in the SolarAccelerator dashboard.\n\nFind your key at: Integrations → Inverters → Home Assistant API (Push)",
+        "description": "Enter the API key generated in the SolarAccelerator dashboard.\n\nFind your key at: Integrations → Inverters → Home Assistant",
         "data": {
           "api_key": "API Key",
           "server_url": "Server URL"
