@@ -10,6 +10,7 @@ from .const import (
     CONF_API_KEY,
     CONF_SERVER_URL,
     CONF_ENTITY_MAPPING,
+    CONF_SOLARMAN_PREFIX,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_API_KEY: entry.data.get(CONF_API_KEY),
         CONF_SERVER_URL: entry.data.get(CONF_SERVER_URL),
         CONF_ENTITY_MAPPING: entry.data.get(CONF_ENTITY_MAPPING, {}),
+        CONF_SOLARMAN_PREFIX: entry.data.get(CONF_SOLARMAN_PREFIX, ""),
         "last_sent": None,
         "next_scheduled": None,
         "last_response": None,

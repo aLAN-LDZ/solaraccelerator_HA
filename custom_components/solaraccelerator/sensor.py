@@ -20,6 +20,7 @@ from .const import (
     CONF_API_KEY,
     CONF_SERVER_URL,
     CONF_ENTITY_MAPPING,
+    CONF_SOLARMAN_PREFIX,
     API_SEND_DATA_ENDPOINT,
     ENTITY_KEYS,
 )
@@ -231,6 +232,7 @@ async def async_send_data(
 
         payload = {
             "timestamp": dt_util.utcnow().isoformat(),
+            "entityPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
             "entities": entities_data,
         }
 
