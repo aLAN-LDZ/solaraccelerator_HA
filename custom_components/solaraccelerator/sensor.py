@@ -24,6 +24,7 @@ from .const import (
     CONF_SOLARMAN_PREFIX,
     API_SEND_DATA_ENDPOINT,
     API_PRICES_ENDPOINT,
+    API_PROFIT_ENDPOINT,
     ENTITY_KEYS,
 )
 
@@ -58,10 +59,17 @@ async def async_setup_entry(
         SolarAcceleratorIsCheapSensor(hass, entry, coordinator_data),
         SolarAcceleratorIsExpensiveSensor(hass, entry, coordinator_data),
         SolarAcceleratorPriceProviderSensor(hass, entry, coordinator_data),
+        # Profit sensors
+        SolarAcceleratorDailyProfitSensor(hass, entry, coordinator_data),
+        SolarAcceleratorDailyLoadCostSensor(hass, entry, coordinator_data),
+        SolarAcceleratorDailyImportCostSensor(hass, entry, coordinator_data),
+        SolarAcceleratorDailyExportValueSensor(hass, entry, coordinator_data),
+        SolarAcceleratorDailyBatteryDeltaSensor(hass, entry, coordinator_data),
     ])
 
-    # Fetch prices immediately on startup
+    # Fetch prices and profit immediately on startup
     hass.async_create_task(async_fetch_prices(hass, coordinator_data))
+    hass.async_create_task(async_fetch_profit(hass, coordinator_data))
 
     # Start hourly data sending task
     task = hass.async_create_task(
@@ -459,6 +467,133 @@ class SolarAcceleratorAverageSellPriceSensor(SolarAcceleratorSensorBase):
         return prices.get("average_sell_price")
 
 
+# Profit sensors
+
+class SolarAcceleratorDailyProfitSensor(SolarAcceleratorSensorBase):
+    """Sensor for daily profit from PV installation."""
+
+    _attr_icon = "mdi:cash-multiple"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_translation_key = "daily_profit"
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
+    ) -> None:
+        """Initialize."""
+        super().__init__(hass, entry, coordinator_data, "daily_profit")
+        self._attr_name = "Dzienny zysk"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        profit = self.coordinator_data.get("profit", {})
+        return profit.get("daily_profit_pln")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        profit = self.coordinator_data.get("profit", {})
+        return {
+            "date": profit.get("date"),
+            "daily_load_cost_pln": profit.get("daily_load_cost_pln"),
+            "daily_import_cost_pln": profit.get("daily_import_cost_pln"),
+            "daily_export_value_pln": profit.get("daily_export_value_pln"),
+            "daily_battery_delta_pln": profit.get("daily_battery_delta_pln"),
+            "hourly_count": profit.get("hourly_count"),
+            "currency": profit.get("currency"),
+            "updated_at": profit.get("updated_at"),
+        }
+
+
+class SolarAcceleratorDailyLoadCostSensor(SolarAcceleratorSensorBase):
+    """Sensor for daily load consumption value."""
+
+    _attr_icon = "mdi:home-lightning-bolt"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_translation_key = "daily_load_cost"
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
+    ) -> None:
+        """Initialize."""
+        super().__init__(hass, entry, coordinator_data, "daily_load_cost")
+        self._attr_name = "Wartość zużycia"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        profit = self.coordinator_data.get("profit", {})
+        return profit.get("daily_load_cost_pln")
+
+
+class SolarAcceleratorDailyImportCostSensor(SolarAcceleratorSensorBase):
+    """Sensor for daily grid import cost."""
+
+    _attr_icon = "mdi:transmission-tower-import"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_translation_key = "daily_import_cost"
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
+    ) -> None:
+        """Initialize."""
+        super().__init__(hass, entry, coordinator_data, "daily_import_cost")
+        self._attr_name = "Koszt importu"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        profit = self.coordinator_data.get("profit", {})
+        return profit.get("daily_import_cost_pln")
+
+
+class SolarAcceleratorDailyExportValueSensor(SolarAcceleratorSensorBase):
+    """Sensor for daily grid export value."""
+
+    _attr_icon = "mdi:transmission-tower-export"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_translation_key = "daily_export_value"
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
+    ) -> None:
+        """Initialize."""
+        super().__init__(hass, entry, coordinator_data, "daily_export_value")
+        self._attr_name = "Wartość eksportu"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        profit = self.coordinator_data.get("profit", {})
+        return profit.get("daily_export_value_pln")
+
+
+class SolarAcceleratorDailyBatteryDeltaSensor(SolarAcceleratorSensorBase):
+    """Sensor for daily battery value delta."""
+
+    _attr_icon = "mdi:battery-sync"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_translation_key = "daily_battery_delta"
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
+    ) -> None:
+        """Initialize."""
+        super().__init__(hass, entry, coordinator_data, "daily_battery_delta")
+        self._attr_name = "Delta baterii"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        profit = self.coordinator_data.get("profit", {})
+        return profit.get("daily_battery_delta_pln")
+
+
 def convert_value(value: str | None, entity_key: str) -> float | int | bool | str | None:
     """Convert entity value to appropriate type for API."""
     if value is None or value in ("unknown", "unavailable", ""):
@@ -632,6 +767,54 @@ async def async_fetch_prices(
     return False
 
 
+async def async_fetch_profit(
+    hass: HomeAssistant,
+    coordinator_data: dict[str, Any],
+) -> bool:
+    """Fetch daily profit from server. Returns True on success."""
+    api_key = coordinator_data.get(CONF_API_KEY)
+    server_url = coordinator_data.get(CONF_SERVER_URL)
+
+    session = async_get_clientsession(hass)
+    endpoint = f"{server_url}{API_PROFIT_ENDPOINT}"
+
+    try:
+        async with session.get(
+            endpoint,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+            },
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                coordinator_data["profit"] = {
+                    "date": data.get("date"),
+                    "daily_profit_pln": data.get("daily_profit_pln"),
+                    "daily_load_cost_pln": data.get("daily_load_cost_pln"),
+                    "daily_import_cost_pln": data.get("daily_import_cost_pln"),
+                    "daily_export_value_pln": data.get("daily_export_value_pln"),
+                    "daily_battery_delta_pln": data.get("daily_battery_delta_pln"),
+                    "hourly_count": data.get("hourly_count"),
+                    "currency": data.get("currency"),
+                    "updated_at": data.get("updated_at"),
+                }
+                coordinator_data["profit_last_update"] = dt_util.now().strftime("%Y-%m-%d %H:%M:%S")
+                _LOGGER.info("Profit data fetched successfully from %s", endpoint)
+                return True
+            elif resp.status == 404:
+                _LOGGER.warning("No profit data available: %s", await resp.text())
+            else:
+                _LOGGER.error("Failed to fetch profit: %s", resp.status)
+
+    except aiohttp.ClientError as e:
+        _LOGGER.error("Connection error fetching profit: %s", e)
+    except Exception as e:
+        _LOGGER.exception("Error fetching profit: %s", e)
+
+    return False
+
+
 async def async_send_data_hourly(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -655,9 +838,10 @@ async def async_send_data_hourly(
             # Wait until next full hour
             await asyncio.sleep(seconds_to_wait)
 
-            # Send data and fetch prices
+            # Send data and fetch prices and profit
             await async_send_data(hass, coordinator_data)
             await async_fetch_prices(hass, coordinator_data)
+            await async_fetch_profit(hass, coordinator_data)
 
         except asyncio.CancelledError:
             _LOGGER.debug("Hourly data sending task cancelled")

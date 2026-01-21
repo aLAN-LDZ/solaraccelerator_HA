@@ -45,6 +45,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "updated_at": None,
         },
         "prices_last_update": None,
+        # Profit data
+        "profit": {
+            "date": None,
+            "daily_profit_pln": None,
+            "daily_load_cost_pln": None,
+            "daily_import_cost_pln": None,
+            "daily_export_value_pln": None,
+            "daily_battery_delta_pln": None,
+            "hourly_count": None,
+            "currency": None,
+            "updated_at": None,
+        },
+        "profit_last_update": None,
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

@@ -27,6 +27,7 @@ ATTR_NEXT_SCHEDULED = "next_scheduled"
 API_TEST_CONNECTION_ENDPOINT = "/api/homeassistant/test-connection"
 API_SEND_DATA_ENDPOINT = "/api/homeassistant/send-data"
 API_PRICES_ENDPOINT = "/api/homeassistant/prices"
+API_PROFIT_ENDPOINT = "/api/homeassistant/profit"
 
 # All 36 required entities for SolarAccelerator API
 # Format: (key, description, unit, category)
