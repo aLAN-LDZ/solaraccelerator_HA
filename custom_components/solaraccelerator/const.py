@@ -26,6 +26,7 @@ ATTR_NEXT_SCHEDULED = "next_scheduled"
 # API endpoints
 API_TEST_CONNECTION_ENDPOINT = "/api/homeassistant/test-connection"
 API_SEND_DATA_ENDPOINT = "/api/homeassistant/send-data"
+API_DATA_READY_ENDPOINT = "/api/homeassistant/data-ready"
 API_PRICES_ENDPOINT = "/api/homeassistant/prices"
 API_PROFIT_ENDPOINT = "/api/homeassistant/profit"
 

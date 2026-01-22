@@ -23,6 +23,7 @@ from .const import (
     CONF_ENTITY_MAPPING,
     CONF_SOLARMAN_PREFIX,
     API_SEND_DATA_ENDPOINT,
+    API_DATA_READY_ENDPOINT,
     API_PRICES_ENDPOINT,
     API_PROFIT_ENDPOINT,
     ENTITY_KEYS,
@@ -761,6 +762,42 @@ async def async_fetch_profit(
     return False
 
 
+async def async_check_data_ready(
+    hass: HomeAssistant,
+    coordinator_data: dict[str, Any],
+) -> bool:
+    """Check if server has processed data and is ready. Returns True if ready."""
+    api_key = coordinator_data.get(CONF_API_KEY)
+    server_url = coordinator_data.get(CONF_SERVER_URL)
+
+    session = async_get_clientsession(hass)
+    endpoint = f"{server_url}{API_DATA_READY_ENDPOINT}"
+
+    try:
+        async with session.get(
+            endpoint,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+            },
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                is_ready = data.get("ready", False)
+                _LOGGER.debug("Data ready check: %s", is_ready)
+                return is_ready
+            else:
+                _LOGGER.warning("Data ready check failed: %s", resp.status)
+                return False
+
+    except aiohttp.ClientError as e:
+        _LOGGER.error("Connection error checking data ready: %s", e)
+    except Exception as e:
+        _LOGGER.exception("Error checking data ready: %s", e)
+
+    return False
+
+
 async def async_send_data_hourly(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -784,10 +821,36 @@ async def async_send_data_hourly(
             # Wait until next full hour
             await asyncio.sleep(seconds_to_wait)
 
-            # Send data and fetch prices and profit
-            await async_send_data(hass, coordinator_data)
-            await async_fetch_prices(hass, coordinator_data)
-            await async_fetch_profit(hass, coordinator_data)
+            # Step 1: Send data to server
+            send_success = await async_send_data(hass, coordinator_data)
+
+            if send_success:
+                # Step 2: Poll data_ready endpoint until server confirms processing
+                max_retries = 12  # Max 2 minutes (12 * 10 seconds)
+                retry_interval = 10  # seconds
+
+                for attempt in range(max_retries):
+                    is_ready = await async_check_data_ready(hass, coordinator_data)
+
+                    if is_ready:
+                        # Step 3: Data processed, fetch updated prices and profit
+                        _LOGGER.info("Server data ready, fetching prices and profit")
+                        await async_fetch_prices(hass, coordinator_data)
+                        await async_fetch_profit(hass, coordinator_data)
+                        break
+
+                    _LOGGER.debug(
+                        "Data not ready yet, retry %d/%d in %d seconds",
+                        attempt + 1,
+                        max_retries,
+                        retry_interval,
+                    )
+                    await asyncio.sleep(retry_interval)
+                else:
+                    _LOGGER.warning(
+                        "Data ready timeout after %d retries, skipping sensor update",
+                        max_retries,
+                    )
 
         except asyncio.CancelledError:
             _LOGGER.debug("Hourly data sending task cancelled")

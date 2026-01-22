@@ -22,7 +22,10 @@ custom_components/solaraccelerator/
 **Data Flow:**
 1. Config flow validates API key via GET `/api/homeassistant/test-connection`
 2. User maps 36 HA entities to SolarAccelerator fields (or uses Solarman auto-mapping)
-3. Background task sends JSON payload every full hour via POST `/api/homeassistant/send-data`
+3. Background task at every full hour:
+   - Sends JSON payload via POST `/api/homeassistant/send-data`
+   - Polls GET `/api/homeassistant/data-ready` until server confirms processing
+   - When ready=true, fetches updated prices and profit data
 4. Force send button allows manual data push
 
 **Key Constants:**
@@ -31,6 +34,9 @@ custom_components/solaraccelerator/
 - API endpoints:
   - `API_TEST_CONNECTION_ENDPOINT = "/api/homeassistant/test-connection"`
   - `API_SEND_DATA_ENDPOINT = "/api/homeassistant/send-data"`
+  - `API_DATA_READY_ENDPOINT = "/api/homeassistant/data-ready"`
+  - `API_PRICES_ENDPOINT = "/api/homeassistant/prices"`
+  - `API_PROFIT_ENDPOINT = "/api/homeassistant/profit"`
 
 ## Development Notes
 
