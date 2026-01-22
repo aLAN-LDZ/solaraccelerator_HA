@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 
 from .const import DOMAIN
-from .sensor import async_send_data, async_fetch_prices, async_fetch_profit
+from .sensor import async_send_data, async_fetch_prices
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,4 +66,3 @@ class SolarAcceleratorSyncButton(ButtonEntity):
         _LOGGER.info("Synchronizing data with SolarAccelerator")
         await async_send_data(self.hass, self.coordinator_data)
         await async_fetch_prices(self.hass, self.coordinator_data)
-        await async_fetch_profit(self.hass, self.coordinator_data)

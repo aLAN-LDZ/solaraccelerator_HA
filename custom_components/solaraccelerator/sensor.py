@@ -61,8 +61,10 @@ async def async_setup_entry(
         SolarAcceleratorPriceProviderSensor(hass, entry, coordinator_data),
         # Profit sensors
         SolarAcceleratorDailyProfitSensor(hass, entry, coordinator_data),
-        SolarAcceleratorBatteryValueSensor(hass, entry, coordinator_data),
-        SolarAcceleratorBatteryAvgPriceSensor(hass, entry, coordinator_data),
+        SolarAcceleratorDailyLoadCostSensor(hass, entry, coordinator_data),
+        SolarAcceleratorDailyImportCostSensor(hass, entry, coordinator_data),
+        SolarAcceleratorDailyExportValueSensor(hass, entry, coordinator_data),
+        SolarAcceleratorDailyBatteryDeltaSensor(hass, entry, coordinator_data),
     ])
 
     # Fetch prices and profit immediately on startup
@@ -486,7 +488,7 @@ class SolarAcceleratorDailyProfitSensor(SolarAcceleratorSensorBase):
     def native_value(self) -> float | None:
         """Return the state."""
         profit = self.coordinator_data.get("profit", {})
-        return profit.get("calc_daily_profit_pln")
+        return profit.get("daily_profit_pln")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -494,51 +496,102 @@ class SolarAcceleratorDailyProfitSensor(SolarAcceleratorSensorBase):
         profit = self.coordinator_data.get("profit", {})
         return {
             "date": profit.get("date"),
+            "daily_load_cost_pln": profit.get("daily_load_cost_pln"),
+            "daily_import_cost_pln": profit.get("daily_import_cost_pln"),
+            "daily_export_value_pln": profit.get("daily_export_value_pln"),
+            "daily_battery_delta_pln": profit.get("daily_battery_delta_pln"),
+            "hourly_count": profit.get("hourly_count"),
+            "currency": profit.get("currency"),
+            "updated_at": profit.get("updated_at"),
         }
 
 
-class SolarAcceleratorBatteryValueSensor(SolarAcceleratorSensorBase):
-    """Sensor for battery energy value."""
+class SolarAcceleratorDailyLoadCostSensor(SolarAcceleratorSensorBase):
+    """Sensor for daily load consumption value."""
 
-    _attr_icon = "mdi:battery-heart-variant"
+    _attr_icon = "mdi:home-lightning-bolt"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "PLN"
-    _attr_translation_key = "battery_value"
+    _attr_translation_key = "daily_load_cost"
 
     def __init__(
         self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
     ) -> None:
         """Initialize."""
-        super().__init__(hass, entry, coordinator_data, "battery_value")
-        self._attr_name = "Wartość baterii"
+        super().__init__(hass, entry, coordinator_data, "daily_load_cost")
+        self._attr_name = "Wartość zużycia"
 
     @property
     def native_value(self) -> float | None:
         """Return the state."""
         profit = self.coordinator_data.get("profit", {})
-        return profit.get("calc_battery_value_pln")
+        return profit.get("daily_load_cost_pln")
 
 
-class SolarAcceleratorBatteryAvgPriceSensor(SolarAcceleratorSensorBase):
-    """Sensor for battery average energy price."""
+class SolarAcceleratorDailyImportCostSensor(SolarAcceleratorSensorBase):
+    """Sensor for daily grid import cost."""
 
-    _attr_icon = "mdi:battery-charging-20"
+    _attr_icon = "mdi:transmission-tower-import"
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = "zł/kWh"
-    _attr_translation_key = "battery_avg_price"
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_translation_key = "daily_import_cost"
 
     def __init__(
         self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
     ) -> None:
         """Initialize."""
-        super().__init__(hass, entry, coordinator_data, "battery_avg_price")
-        self._attr_name = "Średnia cena baterii"
+        super().__init__(hass, entry, coordinator_data, "daily_import_cost")
+        self._attr_name = "Koszt importu"
 
     @property
     def native_value(self) -> float | None:
         """Return the state."""
         profit = self.coordinator_data.get("profit", {})
-        return profit.get("calc_battery_avg_price_pln")
+        return profit.get("daily_import_cost_pln")
+
+
+class SolarAcceleratorDailyExportValueSensor(SolarAcceleratorSensorBase):
+    """Sensor for daily grid export value."""
+
+    _attr_icon = "mdi:transmission-tower-export"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_translation_key = "daily_export_value"
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
+    ) -> None:
+        """Initialize."""
+        super().__init__(hass, entry, coordinator_data, "daily_export_value")
+        self._attr_name = "Wartość eksportu"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        profit = self.coordinator_data.get("profit", {})
+        return profit.get("daily_export_value_pln")
+
+
+class SolarAcceleratorDailyBatteryDeltaSensor(SolarAcceleratorSensorBase):
+    """Sensor for daily battery value delta."""
+
+    _attr_icon = "mdi:battery-sync"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_translation_key = "daily_battery_delta"
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
+    ) -> None:
+        """Initialize."""
+        super().__init__(hass, entry, coordinator_data, "daily_battery_delta")
+        self._attr_name = "Delta baterii"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        profit = self.coordinator_data.get("profit", {})
+        return profit.get("daily_battery_delta_pln")
 
 
 def convert_value(value: str | None, entity_key: str) -> float | int | bool | str | None:
@@ -606,7 +659,7 @@ async def async_send_data(
 
         payload = {
             "timestamp": dt_util.utcnow().isoformat(),
-            "prefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, "deye"),
+            "entityPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
             "entities": entities_data,
         }
 
@@ -737,9 +790,14 @@ async def async_fetch_profit(
                 data = await resp.json()
                 coordinator_data["profit"] = {
                     "date": data.get("date"),
-                    "calc_daily_profit_pln": data.get("calc_daily_profit_pln"),
-                    "calc_battery_value_pln": data.get("calc_battery_value_pln"),
-                    "calc_battery_avg_price_pln": data.get("calc_battery_avg_price_pln"),
+                    "daily_profit_pln": data.get("daily_profit_pln"),
+                    "daily_load_cost_pln": data.get("daily_load_cost_pln"),
+                    "daily_import_cost_pln": data.get("daily_import_cost_pln"),
+                    "daily_export_value_pln": data.get("daily_export_value_pln"),
+                    "daily_battery_delta_pln": data.get("daily_battery_delta_pln"),
+                    "hourly_count": data.get("hourly_count"),
+                    "currency": data.get("currency"),
+                    "updated_at": data.get("updated_at"),
                 }
                 coordinator_data["profit_last_update"] = dt_util.now().strftime("%Y-%m-%d %H:%M:%S")
                 _LOGGER.info("Profit data fetched successfully from %s", endpoint)

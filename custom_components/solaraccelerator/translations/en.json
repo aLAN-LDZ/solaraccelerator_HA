@@ -179,18 +179,9 @@
       },
       "price_provider": {
         "name": "Price Provider"
-      },
-      "daily_profit": {
-        "name": "Daily Profit"
-      },
-      "battery_value": {
-        "name": "Battery Value"
-      },
-      "battery_avg_price": {
-        "name": "Battery Average Price"
       }
-      },
-      "button": {
+    },
+    "button": {
       "sync": {
         "name": "Synchronize"
       }

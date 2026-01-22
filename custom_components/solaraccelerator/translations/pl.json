@@ -179,18 +179,9 @@
       },
       "price_provider": {
         "name": "Dostawca cen"
-      },
-      "daily_profit": {
-        "name": "Dzienny zysk"
-      },
-      "battery_value": {
-        "name": "Wartość baterii"
-      },
-      "battery_avg_price": {
-        "name": "Średnia cena baterii"
       }
-      },
-      "button": {
+    },
+    "button": {
       "sync": {
         "name": "Synchronizuj"
       }

@@ -48,9 +48,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Profit data
         "profit": {
             "date": None,
-            "calc_daily_profit_pln": None,
-            "calc_battery_value_pln": None,
-            "calc_battery_avg_price_pln": None,
+            "daily_profit_pln": None,
+            "daily_load_cost_pln": None,
+            "daily_import_cost_pln": None,
+            "daily_export_value_pln": None,
+            "daily_battery_delta_pln": None,
+            "hourly_count": None,
+            "currency": None,
+            "updated_at": None,
         },
         "profit_last_update": None,
     }
