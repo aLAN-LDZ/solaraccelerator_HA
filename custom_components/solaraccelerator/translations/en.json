@@ -179,6 +179,15 @@
       },
       "price_provider": {
         "name": "Price Provider"
+      },
+      "daily_profit": {
+        "name": "Daily Profit"
+      },
+      "battery_value": {
+        "name": "Battery Value"
+      },
+      "battery_avg_price": {
+        "name": "Battery Avg Price"
       }
     },
     "button": {
