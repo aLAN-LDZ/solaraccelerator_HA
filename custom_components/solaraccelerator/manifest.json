@@ -1,11 +1,12 @@
 {
   "domain": "solaraccelerator",
   "name": "SolarAccelerator",
-  "codeowners": ["@alanwilter"],
+  "codeowners": ["@aLAN-LDZ"],
   "config_flow": true,
-  "documentation": "https://github.com/alanwilter/solaraccelerator_ha",
+  "documentation": "https://github.com/aLAN-LDZ/solaraccelerator_HA",
   "integration_type": "service",
   "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/aLAN-LDZ/solaraccelerator_HA/issues",
   "requirements": ["aiohttp>=3.8.0"],
   "version": "1.0.0",
   "homeassistant": "2024.1.0"
