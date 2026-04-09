@@ -33,7 +33,7 @@ async def async_setup_entry(
 class SolarAcceleratorSyncButton(ButtonEntity):
     """Button to synchronize data with SolarAccelerator."""
 
-    #_attr_has_entity_name = True
+    _attr_has_entity_name = True
     _attr_icon = "mdi:sync"
     _attr_translation_key = "sync"
 
@@ -48,7 +48,6 @@ class SolarAcceleratorSyncButton(ButtonEntity):
         self.entry = entry
         self.coordinator_data = coordinator_data
         self._attr_unique_id = f"{entry.entry_id}_sync"
-        self._attr_name = "Synchronizuj"
 
     @property
     def device_info(self) -> DeviceInfo:

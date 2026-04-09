@@ -33,6 +33,15 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _mask_key(key: str | None) -> str:
+    """Mask API key for safe logging."""
+    if not key:
+        return "***"
+    if len(key) <= 8:
+        return "***"
+    return f"{key[:4]}…{key[-4:]}"
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -81,7 +90,7 @@ async def async_setup_entry(
 class SolarAcceleratorSensorBase(SensorEntity):
     """Base class for Solar Accelerator sensors."""
 
-    #_attr_has_entity_name = True
+    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -121,7 +130,6 @@ class SolarAcceleratorStatusSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "connection_status")
-        self._attr_name = "Status połączenia"
 
     @property
     def native_value(self) -> str:
@@ -149,7 +157,6 @@ class SolarAcceleratorLastSentSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "last_sent")
-        self._attr_name = "Ostatnie wysłanie"
 
     @property
     def native_value(self) -> str | None:
@@ -169,7 +176,6 @@ class SolarAcceleratorNextScheduledSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "next_scheduled")
-        self._attr_name = "Następne wysłanie"
 
     @property
     def native_value(self) -> str | None:
@@ -190,7 +196,6 @@ class SolarAcceleratorEntitiesCountSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "entities_sent")
-        self._attr_name = "Wysłane encje"
 
     @property
     def native_value(self) -> int:
@@ -213,7 +218,6 @@ class SolarAcceleratorCurrentBuyPriceSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "current_buy_price")
-        self._attr_name = "Cena zakupu energii"
 
     @property
     def native_value(self) -> float | None:
@@ -247,7 +251,6 @@ class SolarAcceleratorMinBuyPriceSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "min_buy_price")
-        self._attr_name = "Min cena zakupu dziś"
 
     @property
     def native_value(self) -> float | None:
@@ -269,7 +272,6 @@ class SolarAcceleratorMaxBuyPriceSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "max_buy_price")
-        self._attr_name = "Max cena zakupu dziś"
 
     @property
     def native_value(self) -> float | None:
@@ -291,7 +293,6 @@ class SolarAcceleratorAverageBuyPriceSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "average_buy_price")
-        self._attr_name = "Średnia cena zakupu dziś"
 
     @property
     def native_value(self) -> float | None:
@@ -311,7 +312,6 @@ class SolarAcceleratorIsCheapSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "is_cheap")
-        self._attr_name = "Tania energia"
 
     @property
     def native_value(self) -> bool | None:
@@ -331,7 +331,6 @@ class SolarAcceleratorIsExpensiveSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "is_expensive")
-        self._attr_name = "Droga energia"
 
     @property
     def native_value(self) -> bool | None:
@@ -351,7 +350,6 @@ class SolarAcceleratorPriceProviderSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "price_provider")
-        self._attr_name = "Dostawca cen"
 
     @property
     def native_value(self) -> str | None:
@@ -382,7 +380,6 @@ class SolarAcceleratorCurrentSellPriceSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "current_sell_price")
-        self._attr_name = "Cena sprzedaży energii"
 
     @property
     def native_value(self) -> float | None:
@@ -414,7 +411,6 @@ class SolarAcceleratorMinSellPriceSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "min_sell_price")
-        self._attr_name = "Min cena sprzedaży dziś"
 
     @property
     def native_value(self) -> float | None:
@@ -436,7 +432,6 @@ class SolarAcceleratorMaxSellPriceSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "max_sell_price")
-        self._attr_name = "Max cena sprzedaży dziś"
 
     @property
     def native_value(self) -> float | None:
@@ -458,7 +453,6 @@ class SolarAcceleratorAverageSellPriceSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "average_sell_price")
-        self._attr_name = "Średnia cena sprzedaży dziś"
 
     @property
     def native_value(self) -> float | None:
@@ -482,7 +476,6 @@ class SolarAcceleratorDailyProfitSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "daily_profit")
-        self._attr_name = "Dzienny zysk"
 
     @property
     def native_value(self) -> float | None:
@@ -515,7 +508,6 @@ class SolarAcceleratorBatteryValueSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "battery_value")
-        self._attr_name = "Wartość baterii"
 
     @property
     def native_value(self) -> float | None:
@@ -537,7 +529,6 @@ class SolarAcceleratorBatteryAvgPriceSensor(SolarAcceleratorSensorBase):
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, coordinator_data, "battery_avg_price")
-        self._attr_name = "Średnia cena baterii"
 
     @property
     def native_value(self) -> float | None:
@@ -591,6 +582,7 @@ async def async_send_data(
 
     session = async_get_clientsession(hass)
     endpoint = f"{server_url}{API_SEND_DATA_ENDPOINT}"
+    _LOGGER.debug("POST %s (key=%s)", endpoint, _mask_key(api_key))
 
     try:
         entities_data = {}
@@ -672,6 +664,7 @@ async def async_fetch_prices(
 
     session = async_get_clientsession(hass)
     endpoint = f"{server_url}{API_PRICES_ENDPOINT}"
+    _LOGGER.debug("GET %s (key=%s)", endpoint, _mask_key(api_key))
 
     try:
         async with session.get(
@@ -729,6 +722,7 @@ async def async_fetch_profit(
 
     session = async_get_clientsession(hass)
     endpoint = f"{server_url}{API_PROFIT_ENDPOINT}"
+    _LOGGER.debug("GET %s (key=%s)", endpoint, _mask_key(api_key))
 
     try:
         async with session.get(
@@ -773,6 +767,7 @@ async def async_check_data_ready(
 
     session = async_get_clientsession(hass)
     endpoint = f"{server_url}{API_DATA_READY_ENDPOINT}"
+    _LOGGER.debug("GET %s (key=%s)", endpoint, _mask_key(api_key))
 
     try:
         async with session.get(
