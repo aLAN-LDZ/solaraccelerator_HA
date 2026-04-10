@@ -36,12 +36,21 @@
         "data": {
           "day_pv_energy": "Daily PV production (kWh)",
           "pv1_power": "PV string 1 power (W)",
-          "pv2_power": "PV string 2 power (W)",
           "pv1_voltage": "PV string 1 voltage (V)",
-          "pv2_voltage": "PV string 2 voltage (V)",
           "pv1_current": "PV string 1 current (A)",
-          "pv2_current": "PV string 2 current (A)",
           "total_pv_generation": "Total PV generation (kWh)"
+        }
+      },
+      "entities_pv_optional": {
+        "title": "Entity Mapping - Photovoltaic Panels (Optional)",
+        "description": "Select optional entities for additional PV strings (e.g., second and third string).\n\nIf you don't have additional strings, leave empty.",
+        "data": {
+          "pv2_power": "PV string 2 power (W)",
+          "pv2_voltage": "PV string 2 voltage (V)",
+          "pv2_current": "PV string 2 current (A)",
+          "pv3_power": "PV string 3 power (W)",
+          "pv3_voltage": "PV string 3 voltage (V)",
+          "pv3_current": "PV string 3 current (A)"
         }
       },
       "entities_battery": {
@@ -67,12 +76,18 @@
         "data": {
           "inverter_status": "Inverter status",
           "inverter_voltage_l1": "L1 voltage (V)",
+          "inverter_current_l1": "L1 current (A)",
+          "inverter_power": "Inverter power (W)"
+        }
+      },
+      "entities_inverter_optional": {
+        "title": "Entity Mapping - Inverter (Optional Phases)",
+        "description": "Select optional entities for L2/L3 phases of the inverter.\n\nIf you have a single-phase installation, leave empty.",
+        "data": {
           "inverter_voltage_l2": "L2 voltage (V)",
           "inverter_voltage_l3": "L3 voltage (V)",
-          "inverter_current_l1": "L1 current (A)",
           "inverter_current_l2": "L2 current (A)",
-          "inverter_current_l3": "L3 current (A)",
-          "inverter_power": "Inverter power (W)"
+          "inverter_current_l3": "L3 current (A)"
         }
       },
       "entities_grid": {
@@ -80,9 +95,6 @@
         "description": "Select Home Assistant entities corresponding to grid data.",
         "data": {
           "grid_power": "Grid power (W)",
-          "grid_ct_power_l1": "CT L1 power (W)",
-          "grid_ct_power_l2": "CT L2 power (W)",
-          "grid_ct_power_l3": "CT L3 power (W)",
           "day_grid_import": "Daily grid import (kWh)",
           "day_grid_export": "Daily grid export (kWh)",
           "grid_connected_status": "Grid connection status"
@@ -91,15 +103,30 @@
           "grid_power": "+ import from grid, - export to grid"
         }
       },
+      "entities_grid_optional": {
+        "title": "Entity Mapping - Grid (Optional CT Phases)",
+        "description": "Select optional entities for CT phases L1/L2/L3 of the grid.\n\nIf you don't have CT meters for all phases, leave empty.",
+        "data": {
+          "grid_ct_power_l1": "CT L1 power (W)",
+          "grid_ct_power_l2": "CT L2 power (W)",
+          "grid_ct_power_l3": "CT L3 power (W)"
+        }
+      },
       "entities_load": {
         "title": "Entity Mapping - Load",
         "description": "Select Home Assistant entities corresponding to load data.",
         "data": {
           "day_load_energy": "Daily consumption (kWh)",
           "load_power_l1": "Load L1 power (W)",
-          "load_power_l2": "Load L2 power (W)",
-          "load_power_l3": "Load L3 power (W)",
           "load_frequency": "Grid frequency (Hz)"
+        }
+      },
+      "entities_load_optional": {
+        "title": "Entity Mapping - Load (Optional Phases)",
+        "description": "Select optional entities for L2/L3 phases of the load.\n\nIf you have a single-phase installation, leave empty.",
+        "data": {
+          "load_power_l2": "Load L2 power (W)",
+          "load_power_l3": "Load L3 power (W)"
         }
       },
       "entities_temp": {
@@ -118,6 +145,8 @@
       "integration_disabled": "Integration is disabled. Enable it in Solar Accelerator settings.",
       "invalid_url": "Invalid URL",
       "entity_required": "This field is required",
+      "entity_not_found": "Entity does not exist in Home Assistant",
+      "invalid_unit": "Entity has invalid unit of measurement",
       "prefix_required": "Prefix is required",
       "invalid_prefix": "Invalid prefix (only letters, numbers and underscores)",
       "unknown": "Unknown error"

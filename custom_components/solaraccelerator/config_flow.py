@@ -35,8 +35,10 @@ from .const import (
     DEFAULT_SERVER_URL,
     API_TEST_CONNECTION_ENDPOINT,
     REQUIRED_ENTITIES,
+    OPTIONAL_ENTITIES,
     ENTITY_CATEGORIES,
     build_solarman_entity_mapping,
+    Entity,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -88,9 +90,27 @@ async def async_validate_api_key(
         return {"success": False, "error": "unknown"}
 
 
-def get_entities_for_category(category: str) -> list[tuple[str, str, str, str]]:
+def get_entities_for_category(category: str) -> list[Entity]:
     """Get all entities for a specific category."""
-    return [e for e in REQUIRED_ENTITIES if e[3] == category]
+    return [e for e in REQUIRED_ENTITIES if e.category == category]
+
+
+def get_optional_entities_for_category(category: str) -> list[Entity]:
+    """Get optional entities for a specific category."""
+    return [e for e in OPTIONAL_ENTITIES if e.category == category]
+
+
+async def validate_entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
+    """Check if an entity exists in Home Assistant."""
+    return hass.states.get(entity_id) is not None
+
+
+async def validate_entity_unit(hass: HomeAssistant, entity_id: str, expected_unit: str) -> bool:
+    """Check if an entity has the expected unit of measurement."""
+    state = hass.states.get(entity_id)
+    if state and state.attributes.get("unit_of_measurement") == expected_unit:
+        return True
+    return False
 
 
 class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -221,13 +241,13 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             category_entities = get_entities_for_category(category)
             all_filled = True
 
-            for entity_key, _, _, _ in category_entities:
-                mapped_entity = user_input.get(entity_key, "")
+            for entity in category_entities:
+                mapped_entity = user_input.get(entity.key, "")
                 if mapped_entity:
-                    self.entity_mapping[entity_key] = mapped_entity
+                    self.entity_mapping[entity.key] = mapped_entity
                 else:
                     all_filled = False
-                    errors[entity_key] = "entity_required"
+                    errors[entity.key] = "entity_required"
 
             if all_filled:
                 if next_step:
@@ -238,9 +258,9 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         category_entities = get_entities_for_category(category)
         schema_dict = {}
 
-        for entity_key, description, unit, _ in category_entities:
-            default_value = self.entity_mapping.get(entity_key, vol.UNDEFINED)
-            schema_dict[vol.Required(entity_key, default=default_value)] = EntitySelector(
+        for entity in category_entities:
+            default_value = self.entity_mapping.get(entity.key, vol.UNDEFINED)
+            schema_dict[vol.Required(entity.key, default=default_value)] = EntitySelector(
                 EntitySelectorConfig(domain=["sensor", "binary_sensor"])
             )
 
@@ -253,11 +273,63 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
+    async def _async_step_optional_entities(
+        self, category: str, next_step: str | None, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Generic handler for optional entity mapping steps."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            category_entities = get_optional_entities_for_category(category)
+
+            for entity in category_entities:
+                mapped_entity = user_input.get(entity.key, "").strip()
+                if mapped_entity:
+                    # Validate that the entity exists
+                    if not await validate_entity_exists(self.hass, mapped_entity):
+                        errors[entity.key] = "entity_not_found"
+                    # Validate unit of measurement
+                    elif not await validate_entity_unit(self.hass, mapped_entity, entity.unit):
+                        errors[entity.key] = "invalid_unit"
+                    else:
+                        self.entity_mapping[entity.key] = mapped_entity
+
+            # No errors, proceed to next step
+            if not errors:
+                if next_step:
+                    return await getattr(self, f"async_step_{next_step}")()
+                else:
+                    return self._create_entry()
+
+        category_entities = get_optional_entities_for_category(category)
+        schema_dict = {}
+
+        for entity in category_entities:
+            default_value = self.entity_mapping.get(entity.key, vol.UNDEFINED)
+            schema_dict[vol.Optional(entity.key, default=default_value)] = EntitySelector(
+                EntitySelectorConfig(domain=["sensor", "binary_sensor"])
+            )
+
+        return self.async_show_form(
+            step_id=f"entities_{category}_optional",
+            data_schema=vol.Schema(schema_dict),
+            errors=errors,
+            description_placeholders={
+                "category_name": ENTITY_CATEGORIES.get(category, category),
+            },
+        )
+
     async def async_step_entities_pv(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle PV entity mapping."""
-        return await self._async_step_entities("pv", "entities_battery", user_input)
+        return await self._async_step_entities("pv", "entities_pv_optional", user_input)
+
+    async def async_step_entities_pv_optional(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle optional PV entity mapping."""
+        return await self._async_step_optional_entities("pv", "entities_battery", user_input)
 
     async def async_step_entities_battery(
         self, user_input: dict[str, Any] | None = None
@@ -269,19 +341,37 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle inverter entity mapping."""
-        return await self._async_step_entities("inverter", "entities_grid", user_input)
+        return await self._async_step_entities("inverter", "entities_inverter_optional", user_input)
+
+    async def async_step_entities_inverter_optional(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle optional inverter entity mapping."""
+        return await self._async_step_optional_entities("inverter", "entities_grid", user_input)
 
     async def async_step_entities_grid(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle grid entity mapping."""
-        return await self._async_step_entities("grid", "entities_load", user_input)
+        return await self._async_step_entities("grid", "entities_grid_optional", user_input)
+
+    async def async_step_entities_grid_optional(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle optional grid entity mapping."""
+        return await self._async_step_optional_entities("grid", "entities_load", user_input)
 
     async def async_step_entities_load(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle load entity mapping."""
-        return await self._async_step_entities("load", "entities_temp", user_input)
+        return await self._async_step_entities("load", "entities_load_optional", user_input)
+
+    async def async_step_entities_load_optional(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle optional load entity mapping."""
+        return await self._async_step_optional_entities("load", "entities_temp", user_input)
 
     async def async_step_entities_temp(
         self, user_input: dict[str, Any] | None = None

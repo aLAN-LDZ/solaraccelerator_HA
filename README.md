@@ -47,7 +47,7 @@ Klucz ma format: `sa_haapi_` + 32 znaki
 
 5. Gotowe! Integracja zacznie wysyłać dane automatycznie o każdej pełnej godzinie.
 
-## Obsługiwane encje (36 sensorów)
+## Obsługiwane encje (38 sensorów)
 
 ### PV (Panele fotowoltaiczne)
 | Encja | Opis | Jednostka |

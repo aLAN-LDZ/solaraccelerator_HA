@@ -36,12 +36,21 @@
         "data": {
           "day_pv_energy": "Dzienna produkcja PV (kWh)",
           "pv1_power": "Moc PV string 1 (W)",
-          "pv2_power": "Moc PV string 2 (W)",
           "pv1_voltage": "Napięcie PV string 1 (V)",
-          "pv2_voltage": "Napięcie PV string 2 (V)",
           "pv1_current": "Prąd PV string 1 (A)",
-          "pv2_current": "Prąd PV string 2 (A)",
           "total_pv_generation": "Całkowita generacja PV (kWh)"
+        }
+      },
+      "entities_pv_optional": {
+        "title": "Mapowanie encji - Panele fotowoltaiczne (opcjonalne)",
+        "description": "Wybierz opcjonalne encje dla dodatkowych stringów PV (np. drugi i trzeci string).\n\nJeśli nie masz dodatkowych stringów, pozostaw puste.",
+        "data": {
+          "pv2_power": "Moc PV string 2 (W)",
+          "pv2_voltage": "Napięcie PV string 2 (V)",
+          "pv2_current": "Prąd PV string 2 (A)",
+          "pv3_power": "Moc PV string 3 (W)",
+          "pv3_voltage": "Napięcie PV string 3 (V)",
+          "pv3_current": "Prąd PV string 3 (A)"
         }
       },
       "entities_battery": {
@@ -67,12 +76,18 @@
         "data": {
           "inverter_status": "Status inwertera",
           "inverter_voltage_l1": "Napięcie L1 (V)",
+          "inverter_current_l1": "Prąd L1 (A)",
+          "inverter_power": "Moc inwertera (W)"
+        }
+      },
+      "entities_inverter_optional": {
+        "title": "Mapowanie encji - Inwerter (opcjonalne fazy)",
+        "description": "Wybierz opcjonalne encje dla faz L2/L3 inwertera.\n\nJeśli masz instalację jednofazową, pozostaw puste.",
+        "data": {
           "inverter_voltage_l2": "Napięcie L2 (V)",
           "inverter_voltage_l3": "Napięcie L3 (V)",
-          "inverter_current_l1": "Prąd L1 (A)",
           "inverter_current_l2": "Prąd L2 (A)",
-          "inverter_current_l3": "Prąd L3 (A)",
-          "inverter_power": "Moc inwertera (W)"
+          "inverter_current_l3": "Prąd L3 (A)"
         }
       },
       "entities_grid": {
@@ -80,9 +95,6 @@
         "description": "Wybierz encje z Home Assistant odpowiadające danym sieci elektrycznej.",
         "data": {
           "grid_power": "Moc sieci (W)",
-          "grid_ct_power_l1": "Moc CT L1 (W)",
-          "grid_ct_power_l2": "Moc CT L2 (W)",
-          "grid_ct_power_l3": "Moc CT L3 (W)",
           "day_grid_import": "Dzienny pobór z sieci (kWh)",
           "day_grid_export": "Dzienne oddanie do sieci (kWh)",
           "grid_connected_status": "Status połączenia z siecią"
@@ -91,15 +103,30 @@
           "grid_power": "+ pobór z sieci, - oddawanie do sieci"
         }
       },
+      "entities_grid_optional": {
+        "title": "Mapowanie encji - Sieć (opcjonalne fazy CT)",
+        "description": "Wybierz opcjonalne encje dla faz CT L1/L2/L3 sieci.\n\nJeśli nie masz mierników CT dla wszystkich faz, pozostaw puste.",
+        "data": {
+          "grid_ct_power_l1": "Moc CT L1 (W)",
+          "grid_ct_power_l2": "Moc CT L2 (W)",
+          "grid_ct_power_l3": "Moc CT L3 (W)"
+        }
+      },
       "entities_load": {
         "title": "Mapowanie encji - Obciążenie",
         "description": "Wybierz encje z Home Assistant odpowiadające danym obciążenia.",
         "data": {
           "day_load_energy": "Dzienne zużycie (kWh)",
           "load_power_l1": "Moc obciążenia L1 (W)",
-          "load_power_l2": "Moc obciążenia L2 (W)",
-          "load_power_l3": "Moc obciążenia L3 (W)",
           "load_frequency": "Częstotliwość sieci (Hz)"
+        }
+      },
+      "entities_load_optional": {
+        "title": "Mapowanie encji - Obciążenie (opcjonalne fazy)",
+        "description": "Wybierz opcjonalne encje dla faz L2/L3 obciążenia.\n\nJeśli masz instalację jednofazową, pozostaw puste.",
+        "data": {
+          "load_power_l2": "Moc obciążenia L2 (W)",
+          "load_power_l3": "Moc obciążenia L3 (W)"
         }
       },
       "entities_temp": {
@@ -118,6 +145,8 @@
       "integration_disabled": "Integracja jest wyłączona. Włącz ją w ustawieniach Solar Accelerator.",
       "invalid_url": "Nieprawidłowy adres URL",
       "entity_required": "To pole jest wymagane",
+      "entity_not_found": "Encja nie istnieje w Home Assistant",
+      "invalid_unit": "Encja ma nieprawidłową jednostkę miary",
       "prefix_required": "Prefix jest wymagany",
       "invalid_prefix": "Nieprawidłowy prefix (tylko litery, cyfry i podkreślenia)",
       "unknown": "Nieznany błąd"
