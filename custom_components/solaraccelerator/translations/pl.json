@@ -188,6 +188,23 @@
       },
       "battery_avg_price": {
         "name": "Średnia cena baterii"
+      },
+      "live_status": {
+        "name": "Status LIVE",
+        "state": {
+          "live": "Aktywny",
+          "inactive": "Nieaktywny",
+          "disabled": "Wyłączony przez admina",
+          "rate_limited": "Ograniczony (rate limit)",
+          "auth_error": "Błąd autoryzacji",
+          "error": "Błąd"
+        }
+      },
+      "live_last_push": {
+        "name": "Ostatni push LIVE"
+      },
+      "live_interval": {
+        "name": "Interwał LIVE"
       }
     },
     "button": {

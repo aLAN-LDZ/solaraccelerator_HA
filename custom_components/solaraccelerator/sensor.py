@@ -24,10 +24,14 @@ from .const import (
     CONF_ENTITY_MAPPING,
     CONF_SOLARMAN_PREFIX,
     API_SEND_DATA_ENDPOINT,
+    API_LIVE_ENDPOINT,
     API_DATA_READY_ENDPOINT,
     API_PRICES_ENDPOINT,
     API_PROFIT_ENDPOINT,
     ENTITY_KEYS,
+    DEFAULT_LIVE_INTERVAL,
+    LIVE_DISABLED_RETRY,
+    LIVE_AUTH_RETRY,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -65,6 +69,10 @@ async def async_setup_entry(
         SolarAcceleratorDailyProfitSensor(hass, entry, coordinator_data),
         SolarAcceleratorBatteryValueSensor(hass, entry, coordinator_data),
         SolarAcceleratorBatteryAvgPriceSensor(hass, entry, coordinator_data),
+        # Live channel sensors
+        SolarAcceleratorLiveStatusSensor(hass, entry, coordinator_data),
+        SolarAcceleratorLiveLastPushSensor(hass, entry, coordinator_data),
+        SolarAcceleratorLiveIntervalSensor(hass, entry, coordinator_data),
     ])
 
     # Fetch prices and profit immediately on startup
@@ -76,6 +84,12 @@ async def async_setup_entry(
         async_send_data_hourly(hass, entry, coordinator_data)
     )
     coordinator_data["_task"] = task
+
+    # Start live push task
+    live_task = hass.async_create_task(
+        async_send_live_data_loop(hass, entry, coordinator_data)
+    )
+    coordinator_data["_live_task"] = live_task
 
 
 class SolarAcceleratorSensorBase(SensorEntity):
@@ -546,6 +560,79 @@ class SolarAcceleratorBatteryAvgPriceSensor(SolarAcceleratorSensorBase):
         return profit.get("battery_avg_price_pln")
 
 
+# Live channel sensors
+
+
+class SolarAcceleratorLiveStatusSensor(SolarAcceleratorSensorBase):
+    """Sensor for live channel push status."""
+
+    _attr_icon = "mdi:broadcast"
+    _attr_translation_key = "live_status"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
+    ) -> None:
+        """Initialize."""
+        super().__init__(hass, entry, coordinator_data, "live_status")
+        self._attr_name = "Status LIVE"
+
+    @property
+    def native_value(self) -> str:
+        """Return the state."""
+        return self.coordinator_data.get("live_status", "inactive")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        return {
+            "live_interval_seconds": self.coordinator_data.get("live_interval_seconds"),
+            "live_last_push": self.coordinator_data.get("live_last_push"),
+        }
+
+
+class SolarAcceleratorLiveLastPushSensor(SolarAcceleratorSensorBase):
+    """Sensor for last live push timestamp."""
+
+    _attr_icon = "mdi:clock-fast"
+    _attr_translation_key = "live_last_push"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
+    ) -> None:
+        """Initialize."""
+        super().__init__(hass, entry, coordinator_data, "live_last_push")
+        self._attr_name = "Ostatni push LIVE"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the state."""
+        return self.coordinator_data.get("live_last_push")
+
+
+class SolarAcceleratorLiveIntervalSensor(SolarAcceleratorSensorBase):
+    """Sensor for live push interval configured on server."""
+
+    _attr_icon = "mdi:timer-outline"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "s"
+    _attr_translation_key = "live_interval"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
+    ) -> None:
+        """Initialize."""
+        super().__init__(hass, entry, coordinator_data, "live_interval")
+        self._attr_name = "Interwał LIVE"
+
+    @property
+    def native_value(self) -> int:
+        """Return the state."""
+        return self.coordinator_data.get("live_interval_seconds", DEFAULT_LIVE_INTERVAL)
+
+
 def convert_value(value: str | None, entity_key: str) -> float | int | bool | str | None:
     """Convert entity value to appropriate type for API."""
     if value is None or value in ("unknown", "unavailable", ""):
@@ -860,3 +947,138 @@ async def async_send_data_hourly(
             _LOGGER.exception("Error in hourly send task: %s", e)
             # Wait a minute before retrying
             await asyncio.sleep(60)
+
+
+async def async_send_live_data(
+    hass: HomeAssistant,
+    coordinator_data: dict[str, Any],
+) -> tuple[str, int | None, int | None]:
+    """Send live data to /api/homeassistant/live.
+
+    Returns (status, live_interval_seconds, retry_after_seconds).
+    status values: "ok" | "disabled" | "rate_limited" | "auth_error" | "error"
+    """
+    api_key = coordinator_data.get(CONF_API_KEY)
+    server_url = coordinator_data.get(CONF_SERVER_URL)
+    entity_mapping = coordinator_data.get(CONF_ENTITY_MAPPING, {})
+
+    session = async_get_clientsession(hass)
+    endpoint = f"{server_url}{API_LIVE_ENDPOINT}"
+
+    try:
+        entities_data: dict[str, Any] = {}
+        for entity_key in ENTITY_KEYS:
+            ha_entity_id = entity_mapping.get(entity_key)
+            if ha_entity_id:
+                state = hass.states.get(ha_entity_id)
+                if state:
+                    entities_data[entity_key] = convert_value(state.state, entity_key)
+                else:
+                    entities_data[entity_key] = 0
+            else:
+                entities_data[entity_key] = 0
+
+        payload = {
+            "timestamp": dt_util.utcnow().isoformat(),
+            "entityPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
+            "entities": entities_data,
+        }
+
+        async with session.post(
+            endpoint,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=aiohttp.ClientTimeout(total=15),
+        ) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                live_interval = data.get("live_interval_seconds")
+                coordinator_data["live_status"] = "live"
+                coordinator_data["live_last_push"] = dt_util.now().strftime("%Y-%m-%d %H:%M:%S")
+                if live_interval:
+                    coordinator_data["live_interval_seconds"] = live_interval
+                _LOGGER.debug("Live push OK: %d entities", data.get("entitiesReceived", 0))
+                return ("ok", live_interval, None)
+
+            elif resp.status == 503:
+                coordinator_data["live_status"] = "disabled"
+                _LOGGER.debug("Live channel disabled on server (503)")
+                return ("disabled", None, None)
+
+            elif resp.status == 429:
+                coordinator_data["live_status"] = "rate_limited"
+                retry_after = int(resp.headers.get("Retry-After", "5"))
+                _LOGGER.debug("Live rate limited, retry after %ds", retry_after)
+                return ("rate_limited", None, retry_after)
+
+            elif resp.status == 401:
+                coordinator_data["live_status"] = "auth_error"
+                _LOGGER.error("Live push: invalid API key (401)")
+                return ("auth_error", None, None)
+
+            else:
+                coordinator_data["live_status"] = "error"
+                text = await resp.text()
+                _LOGGER.error("Live push failed: %s - %s", resp.status, text[:100])
+                return ("error", None, None)
+
+    except asyncio.TimeoutError:
+        coordinator_data["live_status"] = "error"
+        _LOGGER.warning("Live push timeout")
+        return ("error", None, None)
+    except aiohttp.ClientError as e:
+        coordinator_data["live_status"] = "error"
+        _LOGGER.warning("Live push connection error: %s", e)
+        return ("error", None, None)
+    except Exception as e:
+        coordinator_data["live_status"] = "error"
+        _LOGGER.exception("Live push unexpected error: %s", e)
+        return ("error", None, None)
+
+
+async def async_send_live_data_loop(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinator_data: dict[str, Any],
+) -> None:
+    """Push live data to server at the interval configured server-side."""
+
+    interval = coordinator_data.get("live_interval_seconds", DEFAULT_LIVE_INTERVAL)
+
+    while True:
+        try:
+            status, server_interval, retry_after = await async_send_live_data(
+                hass, coordinator_data
+            )
+
+            if status == "ok":
+                # Use interval from server if provided
+                if server_interval:
+                    interval = server_interval
+                await asyncio.sleep(interval)
+
+            elif status == "disabled":
+                # Server has live channel off — check again after a minute
+                await asyncio.sleep(LIVE_DISABLED_RETRY)
+
+            elif status == "rate_limited":
+                # Server says we're too fast — wait what it tells us
+                await asyncio.sleep(retry_after or interval)
+
+            elif status == "auth_error":
+                # Bad API key — no point hammering server
+                await asyncio.sleep(LIVE_AUTH_RETRY)
+
+            else:
+                # Generic error — wait normal interval before retry
+                await asyncio.sleep(interval)
+
+        except asyncio.CancelledError:
+            _LOGGER.debug("Live data task cancelled")
+            break
+        except Exception as e:
+            _LOGGER.exception("Unexpected error in live loop: %s", e)
+            await asyncio.sleep(interval)

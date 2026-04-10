@@ -11,6 +11,7 @@ from .const import (
     CONF_SERVER_URL,
     CONF_ENTITY_MAPPING,
     CONF_SOLARMAN_PREFIX,
+    DEFAULT_LIVE_INTERVAL,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -33,6 +34,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "last_response": None,
         "connection_status": "unknown",
         "entities_sent": 0,
+        # Live channel state
+        "live_status": "inactive",
+        "live_last_push": None,
+        "live_interval_seconds": DEFAULT_LIVE_INTERVAL,
         # Price data
         "prices": {
             "current_price": None,
@@ -67,10 +72,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    # Cancel the hourly task if running
     coordinator_data = hass.data[DOMAIN].get(entry.entry_id, {})
+
+    # Cancel background tasks
     if task := coordinator_data.get("_task"):
         task.cancel()
+    if live_task := coordinator_data.get("_live_task"):
+        live_task.cancel()
 
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)

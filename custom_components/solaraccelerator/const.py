@@ -26,9 +26,15 @@ ATTR_NEXT_SCHEDULED = "next_scheduled"
 # API endpoints
 API_TEST_CONNECTION_ENDPOINT = "/api/homeassistant/test-connection"
 API_SEND_DATA_ENDPOINT = "/api/homeassistant/send-data"
+API_LIVE_ENDPOINT = "/api/homeassistant/live"
 API_DATA_READY_ENDPOINT = "/api/homeassistant/data-ready"
 API_PRICES_ENDPOINT = "/api/homeassistant/prices"
 API_PROFIT_ENDPOINT = "/api/homeassistant/profit"
+
+# Live channel defaults
+DEFAULT_LIVE_INTERVAL = 15  # seconds — used until server tells us the real interval
+LIVE_DISABLED_RETRY = 60    # seconds to wait when server returns 503
+LIVE_AUTH_RETRY = 300       # seconds to wait after auth failure
 
 # All 36 required entities for SolarAccelerator API
 # Format: (key, description, unit, category)
