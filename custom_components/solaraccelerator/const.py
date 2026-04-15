@@ -32,6 +32,7 @@ API_LIVE_ENDPOINT = "/api/homeassistant/live"
 API_DATA_READY_ENDPOINT = "/api/homeassistant/data-ready"
 API_PRICES_ENDPOINT = "/api/homeassistant/prices"
 API_PROFIT_ENDPOINT = "/api/homeassistant/profit"
+API_COMMAND_ACK_ENDPOINT = "/api/homeassistant/commands/{id}/ack"
 
 # Live channel defaults
 DEFAULT_LIVE_INTERVAL = 15  # seconds — used until server tells us the real interval

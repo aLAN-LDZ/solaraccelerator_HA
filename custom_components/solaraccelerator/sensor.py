@@ -23,11 +23,14 @@ from .const import (
     CONF_SERVER_URL,
     CONF_ENTITY_MAPPING,
     CONF_SOLARMAN_PREFIX,
+    CONF_EV_ENABLED,
+    CONF_EV_PREFIX,
     API_SEND_DATA_ENDPOINT,
     API_LIVE_ENDPOINT,
     API_DATA_READY_ENDPOINT,
     API_PRICES_ENDPOINT,
     API_PROFIT_ENDPOINT,
+    API_COMMAND_ACK_ENDPOINT,
     ENTITY_KEYS,
     DEFAULT_LIVE_INTERVAL,
     LIVE_DISABLED_RETRY,
@@ -956,11 +959,12 @@ async def async_send_data_hourly(
 async def async_send_live_data(
     hass: HomeAssistant,
     coordinator_data: dict[str, Any],
-) -> tuple[str, int | None, int | None]:
+) -> tuple[str, int | None, int | None, list[dict[str, Any]]]:
     """Send live data to /api/homeassistant/live.
 
-    Returns (status, live_interval_seconds, retry_after_seconds).
+    Returns (status, live_interval_seconds, retry_after_seconds, pending_commands).
     status values: "ok" | "disabled" | "rate_limited" | "auth_error" | "error"
+    pending_commands: lista komend do wykonania (tylko gdy status == "ok").
     """
     api_key = coordinator_data.get(CONF_API_KEY)
     server_url = coordinator_data.get(CONF_SERVER_URL)
@@ -982,11 +986,13 @@ async def async_send_live_data(
             else:
                 entities_data[entity_key] = 0
 
-        payload = {
+        payload: dict[str, Any] = {
             "timestamp": dt_util.utcnow().isoformat(),
             "entityPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
             "entities": entities_data,
         }
+        if coordinator_data.get(CONF_EV_ENABLED) and coordinator_data.get(CONF_EV_PREFIX):
+            payload["evChargerPrefix"] = coordinator_data[CONF_EV_PREFIX]
 
         async with session.post(
             endpoint,
@@ -1004,13 +1010,18 @@ async def async_send_live_data(
                 coordinator_data["live_last_push"] = dt_util.now().strftime("%Y-%m-%d %H:%M:%S")
                 if live_interval:
                     coordinator_data["live_interval_seconds"] = live_interval
-                _LOGGER.debug("Live push OK: %d entities", data.get("entitiesReceived", 0))
-                return ("ok", live_interval, None)
+                pending_commands = data.get("pending_commands", []) or []
+                _LOGGER.debug(
+                    "Live push OK: %d entities, %d pending commands",
+                    data.get("entitiesReceived", 0),
+                    len(pending_commands),
+                )
+                return ("ok", live_interval, None, pending_commands)
 
             elif resp.status == 503:
                 coordinator_data["live_status"] = "disabled"
                 _LOGGER.debug("Live channel disabled on server (503)")
-                return ("disabled", None, None)
+                return ("disabled", None, None, [])
 
             elif resp.status == 429:
                 coordinator_data["live_status"] = "rate_limited"
@@ -1029,31 +1040,94 @@ async def async_send_live_data(
                     "Live rate limited, retry after %ds, server interval=%s",
                     retry_after, live_interval
                 )
-                return ("rate_limited", live_interval, retry_after)
+                return ("rate_limited", live_interval, retry_after, [])
 
             elif resp.status == 401:
                 coordinator_data["live_status"] = "auth_error"
                 _LOGGER.error("Live push: invalid API key (401)")
-                return ("auth_error", None, None)
+                return ("auth_error", None, None, [])
 
             else:
                 coordinator_data["live_status"] = "error"
                 text = await resp.text()
                 _LOGGER.error("Live push failed: %s - %s", resp.status, text[:100])
-                return ("error", None, None)
+                return ("error", None, None, [])
 
     except asyncio.TimeoutError:
         coordinator_data["live_status"] = "error"
         _LOGGER.warning("Live push timeout")
-        return ("error", None, None)
+        return ("error", None, None, [])
     except aiohttp.ClientError as e:
         coordinator_data["live_status"] = "error"
         _LOGGER.warning("Live push connection error: %s", e)
-        return ("error", None, None)
+        return ("error", None, None, [])
     except Exception as e:
         coordinator_data["live_status"] = "error"
         _LOGGER.exception("Live push unexpected error: %s", e)
-        return ("error", None, None)
+        return ("error", None, None, [])
+
+
+async def async_execute_command(
+    hass: HomeAssistant,
+    cmd: dict[str, Any],
+) -> tuple[bool, str | None]:
+    """Wykonaj komendę HA przez hass.services.async_call.
+
+    Zwraca (success, error_message).
+    """
+    domain = cmd.get("domain")
+    service = cmd.get("service")
+    entity_id = cmd.get("entity_id")
+    service_data = cmd.get("service_data") or {}
+
+    if not domain or not service or not entity_id:
+        return (False, "Invalid command: missing domain/service/entity_id")
+
+    try:
+        await hass.services.async_call(
+            domain,
+            service,
+            {"entity_id": entity_id, **service_data},
+            blocking=True,
+        )
+        _LOGGER.info("Command executed: %s.%s on %s", domain, service, entity_id)
+        return (True, None)
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {e}"
+        _LOGGER.error("Command failed (%s.%s on %s): %s", domain, service, entity_id, error_msg)
+        return (False, error_msg[:500])
+
+
+async def async_ack_command(
+    hass: HomeAssistant,
+    coordinator_data: dict[str, Any],
+    cmd_id: str,
+    success: bool,
+    error: str | None,
+) -> None:
+    """Wyślij ACK do serwera po wykonaniu komendy."""
+    api_key = coordinator_data.get(CONF_API_KEY)
+    server_url = coordinator_data.get(CONF_SERVER_URL)
+    session = async_get_clientsession(hass)
+    endpoint = f"{server_url}{API_COMMAND_ACK_ENDPOINT.replace('{id}', cmd_id)}"
+
+    try:
+        async with session.post(
+            endpoint,
+            json={"success": success, "error": error},
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                _LOGGER.warning("ACK for %s failed: %s - %s", cmd_id, resp.status, text[:100])
+            else:
+                _LOGGER.debug("ACK for %s sent (success=%s)", cmd_id, success)
+    except Exception as e:
+        _LOGGER.warning("ACK for %s connection error: %s", cmd_id, e)
 
 
 async def async_send_live_data_loop(
@@ -1067,7 +1141,7 @@ async def async_send_live_data_loop(
 
     while True:
         try:
-            status, server_interval, retry_after = await async_send_live_data(
+            status, server_interval, retry_after, pending_commands = await async_send_live_data(
                 hass, coordinator_data
             )
 
@@ -1077,6 +1151,12 @@ async def async_send_live_data_loop(
                 interval = server_interval
 
             if status == "ok":
+                for cmd in pending_commands:
+                    cmd_id = cmd.get("id")
+                    if not cmd_id:
+                        continue
+                    success, error_msg = await async_execute_command(hass, cmd)
+                    await async_ack_command(hass, coordinator_data, cmd_id, success, error_msg)
                 await asyncio.sleep(interval)
 
             elif status == "disabled":
