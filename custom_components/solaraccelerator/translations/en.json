@@ -109,6 +109,17 @@
           "radiator_temp": "Radiator temperature (°C)",
           "dc_transformer_temp": "DC transformer temperature (°C)"
         }
+      },
+      "ev_charger": {
+        "title": "EV Charger (OCPP)",
+        "description": "If you have an EV charger integrated in HA via OCPP (e.g. ARC Charger, Wallbox), enable it here.\n\nEnter the entity prefix — this is the Charge Point ID from the OCPP integration.\n\nExample: if your entities are named `sensor.arccharger_power_active_import`, the prefix is `arccharger`.",
+        "data": {
+          "ev_enabled": "I have an EV charger via OCPP",
+          "ev_prefix": "Charger entity prefix"
+        },
+        "data_description": {
+          "ev_prefix": "e.g. arccharger, wallbox, chargepoint"
+        }
       }
     },
     "error": {

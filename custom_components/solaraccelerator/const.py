@@ -8,6 +8,8 @@ CONF_SERVER_URL = "server_url"
 CONF_ENTITY_MAPPING = "entity_mapping"
 CONF_CONFIG_MODE = "config_mode"
 CONF_SOLARMAN_PREFIX = "solarman_prefix"
+CONF_EV_ENABLED = "ev_enabled"
+CONF_EV_PREFIX = "ev_prefix"
 
 # Configuration modes
 CONFIG_MODE_SOLARMAN = "solarman"
@@ -88,7 +90,24 @@ REQUIRED_ENTITIES = [
     # Temperatury
     ("radiator_temp", "Temperatura radiatora", "°C", "temp"),
     ("dc_transformer_temp", "Temperatura transformatora DC", "°C", "temp"),
+
+    # Ładowarka EV (OCPP)
+    ("ev_status", "Status ładowarki", "-", "ev_charger"),
+    ("ev_power_active_import", "Moc ładowania", "kW", "ev_charger"),
+    ("ev_energy_session", "Energia sesji", "kWh", "ev_charger"),
+    ("ev_energy_active_import_register", "Licznik energii", "kWh", "ev_charger"),
+    ("ev_current_import", "Prąd ładowania", "A", "ev_charger"),
+    ("ev_voltage", "Napięcie", "V", "ev_charger"),
+    ("ev_frequency", "Częstotliwość", "Hz", "ev_charger"),
+    ("ev_temperature", "Temperatura", "°C", "ev_charger"),
+    ("ev_soc", "SoC auta", "%", "ev_charger"),
+    ("ev_time_session", "Czas sesji", "min", "ev_charger"),
+    ("ev_error_code", "Kod błędu", "-", "ev_charger"),
+    ("ev_transaction_id", "ID transakcji", "-", "ev_charger"),
 ]
+
+# Klucze EV — pomijane w send_data jeśli ev_enabled=False
+EV_ENTITY_KEYS = [e[0] for e in REQUIRED_ENTITIES if e[3] == "ev_charger"]
 
 # Entity keys for easy access
 ENTITY_KEYS = [entity[0] for entity in REQUIRED_ENTITIES]
@@ -101,6 +120,7 @@ ENTITY_CATEGORIES = {
     "grid": "Sieć",
     "load": "Obciążenie",
     "temp": "Temperatury",
+    "ev_charger": "Ładowarka EV",
 }
 
 
@@ -145,4 +165,26 @@ def build_solarman_entity_mapping(prefix: str) -> dict[str, str]:
         "load_frequency": f"sensor.{prefix}_grid_frequency",
         "radiator_temp": f"sensor.{prefix}_temperature",
         "dc_transformer_temp": f"sensor.{prefix}_dc_temperature",
+    }
+
+
+def build_ocpp_entity_mapping(prefix: str) -> dict[str, str]:
+    """Build entity mapping for OCPP charger integration based on prefix.
+
+    Expects standard OCPP HACS integration naming: sensor.{prefix}_{field}
+    where {prefix} is the Charge Point ID (e.g. "arccharger").
+    """
+    return {
+        "ev_status": f"sensor.{prefix}_status",
+        "ev_power_active_import": f"sensor.{prefix}_power_active_import",
+        "ev_energy_session": f"sensor.{prefix}_energy_session",
+        "ev_energy_active_import_register": f"sensor.{prefix}_energy_active_import_register",
+        "ev_current_import": f"sensor.{prefix}_current_import",
+        "ev_voltage": f"sensor.{prefix}_voltage",
+        "ev_frequency": f"sensor.{prefix}_frequency",
+        "ev_temperature": f"sensor.{prefix}_temperature",
+        "ev_soc": f"sensor.{prefix}_soc",
+        "ev_time_session": f"sensor.{prefix}_time_session",
+        "ev_error_code": f"sensor.{prefix}_error_code",
+        "ev_transaction_id": f"sensor.{prefix}_transaction_id",
     }

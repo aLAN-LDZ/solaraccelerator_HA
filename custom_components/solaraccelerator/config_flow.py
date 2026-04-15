@@ -30,6 +30,8 @@ from .const import (
     CONF_ENTITY_MAPPING,
     CONF_CONFIG_MODE,
     CONF_SOLARMAN_PREFIX,
+    CONF_EV_ENABLED,
+    CONF_EV_PREFIX,
     CONFIG_MODE_SOLARMAN,
     CONFIG_MODE_MANUAL,
     DEFAULT_SERVER_URL,
@@ -37,6 +39,7 @@ from .const import (
     REQUIRED_ENTITIES,
     ENTITY_CATEGORIES,
     build_solarman_entity_mapping,
+    build_ocpp_entity_mapping,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -104,6 +107,8 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.server_url: str = DEFAULT_SERVER_URL
         self.config_mode: str = ""
         self.solarman_prefix: str = ""
+        self.ev_enabled: bool = False
+        self.ev_prefix: str = ""
         self.entity_mapping: dict[str, str] = {}
 
     async def async_step_user(
@@ -197,7 +202,7 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 self.solarman_prefix = prefix
                 self.entity_mapping = build_solarman_entity_mapping(prefix)
-                return self._create_entry()
+                return await self.async_step_ev_charger()
 
         schema = vol.Schema({
             vol.Required(CONF_SOLARMAN_PREFIX): TextSelector(
@@ -287,7 +292,43 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle temperature entity mapping."""
-        return await self._async_step_entities("temp", None, user_input)
+        return await self._async_step_entities("temp", "ev_charger", user_input)
+
+    async def async_step_ev_charger(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Ask if user has an OCPP EV charger integrated via HA, and its prefix."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            self.ev_enabled = bool(user_input.get(CONF_EV_ENABLED, False))
+
+            if self.ev_enabled:
+                prefix = user_input.get(CONF_EV_PREFIX, "").strip().lower()
+                if not prefix:
+                    errors[CONF_EV_PREFIX] = "prefix_required"
+                elif " " in prefix or not prefix.replace("_", "").isalnum():
+                    errors[CONF_EV_PREFIX] = "invalid_prefix"
+                else:
+                    self.ev_prefix = prefix
+                    # Merge EV mapping into existing entity_mapping
+                    self.entity_mapping.update(build_ocpp_entity_mapping(prefix))
+                    return self._create_entry()
+            else:
+                return self._create_entry()
+
+        schema = vol.Schema({
+            vol.Required(CONF_EV_ENABLED, default=False): bool,
+            vol.Optional(CONF_EV_PREFIX, default="arccharger"): TextSelector(
+                TextSelectorConfig(type=TextSelectorType.TEXT)
+            ),
+        })
+
+        return self.async_show_form(
+            step_id="ev_charger",
+            data_schema=schema,
+            errors=errors,
+        )
 
     def _create_entry(self) -> FlowResult:
         """Create the config entry."""
@@ -302,6 +343,8 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_SERVER_URL: self.server_url,
                 CONF_CONFIG_MODE: self.config_mode,
                 CONF_SOLARMAN_PREFIX: self.solarman_prefix,
+                CONF_EV_ENABLED: self.ev_enabled,
+                CONF_EV_PREFIX: self.ev_prefix,
                 CONF_ENTITY_MAPPING: self.entity_mapping,
             },
         )

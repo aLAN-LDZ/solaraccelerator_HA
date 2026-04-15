@@ -644,6 +644,10 @@ def convert_value(value: str | None, entity_key: str) -> float | int | bool | st
     if entity_key == "inverter_status":
         return value
 
+    # Encje EV, których wartości są tekstowe
+    if entity_key in ("ev_status", "ev_error_code", "ev_transaction_id"):
+        return value
+
     try:
         float_val = float(value)
         if float_val.is_integer():

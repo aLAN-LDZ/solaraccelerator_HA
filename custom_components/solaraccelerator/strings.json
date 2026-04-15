@@ -109,6 +109,17 @@
           "radiator_temp": "Temperatura radiatora (°C)",
           "dc_transformer_temp": "Temperatura transformatora DC (°C)"
         }
+      },
+      "ev_charger": {
+        "title": "Ładowarka EV (OCPP)",
+        "description": "Jeśli masz ładowarkę EV zintegrowaną w HA przez OCPP (np. ARC Charger, Wallbox), włącz ją tutaj.\n\nWpisz prefix encji — to Charge Point ID z integracji OCPP.\n\nPrzykład: jeśli Twoje encje nazywają się `sensor.arccharger_power_active_import`, to prefix to `arccharger`.",
+        "data": {
+          "ev_enabled": "Mam ładowarkę EV przez OCPP",
+          "ev_prefix": "Prefix encji ładowarki"
+        },
+        "data_description": {
+          "ev_prefix": "np. arccharger, wallbox, chargepoint"
+        }
       }
     },
     "error": {
