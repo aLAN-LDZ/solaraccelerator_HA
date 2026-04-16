@@ -32,6 +32,8 @@ from .const import (
     API_PROFIT_ENDPOINT,
     API_COMMAND_ACK_ENDPOINT,
     ENTITY_KEYS,
+    EV_ENTITY_KEYS,
+    REQUIRED_ENTITIES,
     DEFAULT_LIVE_INTERVAL,
     LIVE_DISABLED_RETRY,
     LIVE_AUTH_RETRY,
@@ -213,6 +215,64 @@ class SolarAcceleratorEntitiesCountSensor(SolarAcceleratorSensorBase):
     def native_value(self) -> int:
         """Return the state."""
         return self.coordinator_data.get("entities_sent", 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Szczegóły wysyłanych encji z podziałem na falownik i ładowarkę."""
+        entity_mapping = self.coordinator_data.get(CONF_ENTITY_MAPPING, {})
+        ev_enabled = bool(
+            self.coordinator_data.get(CONF_EV_ENABLED)
+            and self.coordinator_data.get(CONF_EV_PREFIX)
+        )
+
+        inverter_entities: list[str] = []
+        inverter_missing: list[str] = []
+        ev_entities: list[str] = []
+        ev_missing: list[str] = []
+
+        ev_keys_set = set(EV_ENTITY_KEYS)
+
+        for key, desc, unit, category in REQUIRED_ENTITIES:
+            is_ev = key in ev_keys_set
+            ha_id = entity_mapping.get(key)
+
+            if is_ev:
+                if not ev_enabled:
+                    continue
+                if ha_id:
+                    state = self.hass.states.get(ha_id)
+                    if state and state.state not in ("unknown", "unavailable"):
+                        ev_entities.append(f"{key} → {ha_id}")
+                    else:
+                        ev_missing.append(f"{key} → {ha_id} (brak stanu)")
+                else:
+                    ev_missing.append(key)
+            else:
+                if ha_id:
+                    state = self.hass.states.get(ha_id)
+                    if state and state.state not in ("unknown", "unavailable"):
+                        inverter_entities.append(f"{key} → {ha_id}")
+                    else:
+                        inverter_missing.append(f"{key} → {ha_id} (brak stanu)")
+                else:
+                    inverter_missing.append(key)
+
+        attrs: dict[str, Any] = {
+            "falownik_aktywne": len(inverter_entities),
+            "falownik_brakujące": len(inverter_missing),
+            "falownik_lista": inverter_entities,
+            "falownik_brak": inverter_missing,
+        }
+        if ev_enabled:
+            attrs["ev_aktywne"] = len(ev_entities)
+            attrs["ev_brakujące"] = len(ev_missing)
+            attrs["ev_lista"] = ev_entities
+            attrs["ev_brak"] = ev_missing
+            attrs["ev_prefix"] = self.coordinator_data.get(CONF_EV_PREFIX)
+        else:
+            attrs["ev_enabled"] = False
+
+        return attrs
 
 
 # Price sensors
