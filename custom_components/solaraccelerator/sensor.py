@@ -31,7 +31,7 @@ from .const import (
     API_PRICES_ENDPOINT,
     API_PROFIT_ENDPOINT,
     API_COMMAND_ACK_ENDPOINT,
-    ENTITY_KEYS,
+    INVERTER_KEYS,
     EV_ENTITY_KEYS,
     REQUIRED_ENTITIES,
     DEFAULT_LIVE_INTERVAL,
@@ -242,20 +242,20 @@ class SolarAcceleratorEntitiesCountSensor(SolarAcceleratorSensorBase):
                 if ha_id:
                     state = self.hass.states.get(ha_id)
                     if state and state.state not in ("unknown", "unavailable"):
-                        ev_entities.append(f"{key} → {ha_id}")
+                        ev_entities.append(f"ev_charger.{key} → {ha_id}")
                     else:
-                        ev_missing.append(f"{key} → {ha_id} (brak stanu)")
+                        ev_missing.append(f"ev_charger.{key} → {ha_id} (brak stanu)")
                 else:
-                    ev_missing.append(key)
+                    ev_missing.append(f"ev_charger.{key}")
             else:
                 if ha_id:
                     state = self.hass.states.get(ha_id)
                     if state and state.state not in ("unknown", "unavailable"):
-                        inverter_entities.append(f"{key} → {ha_id}")
+                        inverter_entities.append(f"inverter.{key} → {ha_id}")
                     else:
-                        inverter_missing.append(f"{key} → {ha_id} (brak stanu)")
+                        inverter_missing.append(f"inverter.{key} → {ha_id} (brak stanu)")
                 else:
-                    inverter_missing.append(key)
+                    inverter_missing.append(f"inverter.{key}")
 
         attrs: dict[str, Any] = {
             "falownik_aktywne": len(inverter_entities),
@@ -708,7 +708,7 @@ def convert_value(value: str | None, entity_key: str) -> float | int | bool | st
         return value
 
     # Encje EV, których wartości są tekstowe
-    if entity_key in ("ev_status", "ev_error_code", "ev_transaction_id"):
+    if entity_key in ("status", "error_code", "transaction_id"):
         return value
 
     try:
@@ -746,27 +746,53 @@ async def async_send_data(
     session = async_get_clientsession(hass)
     endpoint = f"{server_url}{API_SEND_DATA_ENDPOINT}"
 
+    ev_enabled = bool(
+        coordinator_data.get(CONF_EV_ENABLED)
+        and coordinator_data.get(CONF_EV_PREFIX)
+    )
+
     try:
-        entities_data = {}
+        inverter_data: dict[str, Any] = {}
+        ev_data: dict[str, Any] = {}
         entities_count = 0
 
-        for entity_key in ENTITY_KEYS:
+        for entity_key in INVERTER_KEYS:
             ha_entity_id = entity_mapping.get(entity_key)
             if ha_entity_id:
                 state = hass.states.get(ha_entity_id)
                 if state:
                     value = convert_value(state.state, entity_key)
-                    entities_data[entity_key] = value
+                    inverter_data[entity_key] = value
                     entities_count += 1
                 else:
-                    entities_data[entity_key] = 0
+                    inverter_data[entity_key] = 0
             else:
-                entities_data[entity_key] = 0
+                inverter_data[entity_key] = 0
+
+        if ev_enabled:
+            for entity_key in EV_ENTITY_KEYS:
+                ha_entity_id = entity_mapping.get(entity_key)
+                if ha_entity_id:
+                    state = hass.states.get(ha_entity_id)
+                    if state:
+                        value = convert_value(state.state, entity_key)
+                        ev_data[entity_key] = value
+                        entities_count += 1
+                    else:
+                        ev_data[entity_key] = 0
+                else:
+                    ev_data[entity_key] = 0
+
+        entities_payload: dict[str, Any] = {
+            "inverter": inverter_data,
+        }
+        if ev_enabled and ev_data:
+            entities_payload["ev_charger"] = ev_data
 
         payload = {
             "timestamp": dt_util.utcnow().isoformat(),
             "entityPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
-            "entities": entities_data,
+            "entities": entities_payload,
         }
 
         async with session.post(
@@ -1033,26 +1059,49 @@ async def async_send_live_data(
     session = async_get_clientsession(hass)
     endpoint = f"{server_url}{API_LIVE_ENDPOINT}"
 
+    ev_enabled = bool(
+        coordinator_data.get(CONF_EV_ENABLED)
+        and coordinator_data.get(CONF_EV_PREFIX)
+    )
+
     try:
-        entities_data: dict[str, Any] = {}
-        for entity_key in ENTITY_KEYS:
+        inverter_data: dict[str, Any] = {}
+        ev_data: dict[str, Any] = {}
+
+        for entity_key in INVERTER_KEYS:
             ha_entity_id = entity_mapping.get(entity_key)
             if ha_entity_id:
                 state = hass.states.get(ha_entity_id)
                 if state:
-                    entities_data[entity_key] = convert_value(state.state, entity_key)
+                    inverter_data[entity_key] = convert_value(state.state, entity_key)
                 else:
-                    entities_data[entity_key] = 0
+                    inverter_data[entity_key] = 0
             else:
-                entities_data[entity_key] = 0
+                inverter_data[entity_key] = 0
+
+        if ev_enabled:
+            for entity_key in EV_ENTITY_KEYS:
+                ha_entity_id = entity_mapping.get(entity_key)
+                if ha_entity_id:
+                    state = hass.states.get(ha_entity_id)
+                    if state:
+                        ev_data[entity_key] = convert_value(state.state, entity_key)
+                    else:
+                        ev_data[entity_key] = 0
+                else:
+                    ev_data[entity_key] = 0
+
+        entities_payload: dict[str, Any] = {
+            "inverter": inverter_data,
+        }
+        if ev_enabled and ev_data:
+            entities_payload["ev_charger"] = ev_data
 
         payload: dict[str, Any] = {
             "timestamp": dt_util.utcnow().isoformat(),
             "entityPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
-            "entities": entities_data,
+            "entities": entities_payload,
         }
-        if coordinator_data.get(CONF_EV_ENABLED) and coordinator_data.get(CONF_EV_PREFIX):
-            payload["evChargerPrefix"] = coordinator_data[CONF_EV_PREFIX]
 
         async with session.post(
             endpoint,

@@ -92,23 +92,28 @@ REQUIRED_ENTITIES = [
     ("radiator_temp", "Temperatura radiatora", "°C", "temp"),
     ("dc_transformer_temp", "Temperatura transformatora DC", "°C", "temp"),
 
-    # Ładowarka EV (OCPP)
-    ("ev_status", "Status ładowarki", "-", "ev_charger"),
-    ("ev_power_active_import", "Moc ładowania", "kW", "ev_charger"),
-    ("ev_energy_session", "Energia sesji", "kWh", "ev_charger"),
-    ("ev_energy_active_import_register", "Licznik energii", "kWh", "ev_charger"),
-    ("ev_current_import", "Prąd ładowania", "A", "ev_charger"),
-    ("ev_voltage", "Napięcie", "V", "ev_charger"),
-    ("ev_frequency", "Częstotliwość", "Hz", "ev_charger"),
-    ("ev_temperature", "Temperatura", "°C", "ev_charger"),
-    ("ev_soc", "SoC auta", "%", "ev_charger"),
-    ("ev_time_session", "Czas sesji", "min", "ev_charger"),
-    ("ev_error_code", "Kod błędu", "-", "ev_charger"),
-    ("ev_transaction_id", "ID transakcji", "-", "ev_charger"),
+    # Ładowarka EV (OCPP) — klucze BEZ prefiksu ev_, kategoria daje kontekst
+    ("status", "Status ładowarki", "-", "ev_charger"),
+    ("power_active_import", "Moc ładowania", "kW", "ev_charger"),
+    ("energy_session", "Energia sesji", "kWh", "ev_charger"),
+    ("energy_active_import_register", "Licznik energii", "kWh", "ev_charger"),
+    ("current_import", "Prąd ładowania", "A", "ev_charger"),
+    ("voltage", "Napięcie", "V", "ev_charger"),
+    ("frequency", "Częstotliwość", "Hz", "ev_charger"),
+    ("temperature", "Temperatura", "°C", "ev_charger"),
+    ("soc", "SoC auta", "%", "ev_charger"),
+    ("time_session", "Czas sesji", "min", "ev_charger"),
+    ("error_code", "Kod błędu", "-", "ev_charger"),
+    ("transaction_id", "ID transakcji", "-", "ev_charger"),
 ]
 
-# Klucze EV — pomijane w send_data jeśli ev_enabled=False
-EV_ENTITY_KEYS = [e[0] for e in REQUIRED_ENTITIES if e[3] == "ev_charger"]
+# Encje falownika (wszystko poza ev_charger)
+INVERTER_ENTITIES = [e for e in REQUIRED_ENTITIES if e[3] != "ev_charger"]
+INVERTER_KEYS = [e[0] for e in INVERTER_ENTITIES]
+
+# Encje EV
+EV_ENTITIES = [e for e in REQUIRED_ENTITIES if e[3] == "ev_charger"]
+EV_ENTITY_KEYS = [e[0] for e in EV_ENTITIES]
 
 # Entity keys for easy access
 ENTITY_KEYS = [entity[0] for entity in REQUIRED_ENTITIES]
@@ -176,16 +181,16 @@ def build_ocpp_entity_mapping(prefix: str) -> dict[str, str]:
     where {prefix} is the Charge Point ID (e.g. "arccharger").
     """
     return {
-        "ev_status": f"sensor.{prefix}_status",
-        "ev_power_active_import": f"sensor.{prefix}_power_active_import",
-        "ev_energy_session": f"sensor.{prefix}_energy_session",
-        "ev_energy_active_import_register": f"sensor.{prefix}_energy_active_import_register",
-        "ev_current_import": f"sensor.{prefix}_current_import",
-        "ev_voltage": f"sensor.{prefix}_voltage",
-        "ev_frequency": f"sensor.{prefix}_frequency",
-        "ev_temperature": f"sensor.{prefix}_temperature",
-        "ev_soc": f"sensor.{prefix}_soc",
-        "ev_time_session": f"sensor.{prefix}_time_session",
-        "ev_error_code": f"sensor.{prefix}_error_code",
-        "ev_transaction_id": f"sensor.{prefix}_transaction_id",
+        "status": f"sensor.{prefix}_status",
+        "power_active_import": f"sensor.{prefix}_power_active_import",
+        "energy_session": f"sensor.{prefix}_energy_session",
+        "energy_active_import_register": f"sensor.{prefix}_energy_active_import_register",
+        "current_import": f"sensor.{prefix}_current_import",
+        "voltage": f"sensor.{prefix}_voltage",
+        "frequency": f"sensor.{prefix}_frequency",
+        "temperature": f"sensor.{prefix}_temperature",
+        "soc": f"sensor.{prefix}_soc",
+        "time_session": f"sensor.{prefix}_time_session",
+        "error_code": f"sensor.{prefix}_error_code",
+        "transaction_id": f"sensor.{prefix}_transaction_id",
     }
