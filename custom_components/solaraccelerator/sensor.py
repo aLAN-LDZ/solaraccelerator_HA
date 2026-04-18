@@ -791,7 +791,7 @@ async def async_send_data(
 
         payload: dict[str, Any] = {
             "timestamp": dt_util.utcnow().isoformat(),
-            "entityPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
+            "inverterPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
             "entities": entities_payload,
         }
         if ev_enabled:
@@ -1101,7 +1101,7 @@ async def async_send_live_data(
 
         payload: dict[str, Any] = {
             "timestamp": dt_util.utcnow().isoformat(),
-            "entityPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
+            "inverterPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
             "entities": entities_payload,
         }
         if ev_enabled:
