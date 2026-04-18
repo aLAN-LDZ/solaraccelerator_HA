@@ -10,6 +10,7 @@ CONF_CONFIG_MODE = "config_mode"
 CONF_SOLARMAN_PREFIX = "solarman_prefix"
 CONF_EV_ENABLED = "ev_enabled"
 CONF_EV_PREFIX = "ev_prefix"
+CONF_EV_CONFIG_MODE = "ev_config_mode"
 CONF_INVERTER_MODEL = "inverter_model"
 CONF_EV_MODEL = "ev_model"
 
