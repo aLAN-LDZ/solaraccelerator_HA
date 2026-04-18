@@ -32,12 +32,16 @@ from .const import (
     CONF_SOLARMAN_PREFIX,
     CONF_EV_ENABLED,
     CONF_EV_PREFIX,
+    CONF_INVERTER_MODEL,
+    CONF_EV_MODEL,
     CONFIG_MODE_SOLARMAN,
     CONFIG_MODE_MANUAL,
     DEFAULT_SERVER_URL,
     API_TEST_CONNECTION_ENDPOINT,
     REQUIRED_ENTITIES,
     ENTITY_CATEGORIES,
+    SUPPORTED_INVERTERS,
+    SUPPORTED_EV_CHARGERS,
     build_solarman_entity_mapping,
     build_ocpp_entity_mapping,
 )
@@ -107,8 +111,10 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.server_url: str = DEFAULT_SERVER_URL
         self.config_mode: str = ""
         self.solarman_prefix: str = ""
+        self.inverter_model: str = ""
         self.ev_enabled: bool = False
         self.ev_prefix: str = ""
+        self.ev_model: str = ""
         self.entity_mapping: dict[str, str] = {}
 
     async def async_step_user(
@@ -163,6 +169,7 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle configuration mode selection."""
         if user_input is not None:
             self.config_mode = user_input.get(CONF_CONFIG_MODE, CONFIG_MODE_MANUAL)
+            self.inverter_model = user_input.get(CONF_INVERTER_MODEL, "")
 
             if self.config_mode == CONFIG_MODE_SOLARMAN:
                 return await self.async_step_solarman_prefix()
@@ -170,6 +177,12 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_entities_pv()
 
         schema = vol.Schema({
+            vol.Required(CONF_INVERTER_MODEL): SelectSelector(
+                SelectSelectorConfig(
+                    options=SUPPORTED_INVERTERS,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            ),
             vol.Required(CONF_CONFIG_MODE, default=CONFIG_MODE_SOLARMAN): SelectSelector(
                 SelectSelectorConfig(
                     options=[
@@ -311,6 +324,7 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors[CONF_EV_PREFIX] = "invalid_prefix"
                 else:
                     self.ev_prefix = prefix
+                    self.ev_model = user_input.get(CONF_EV_MODEL, "")
                     # Merge EV mapping into existing entity_mapping
                     self.entity_mapping.update(build_ocpp_entity_mapping(prefix))
                     return self._create_entry()
@@ -319,6 +333,12 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema({
             vol.Required(CONF_EV_ENABLED, default=False): bool,
+            vol.Optional(CONF_EV_MODEL): SelectSelector(
+                SelectSelectorConfig(
+                    options=SUPPORTED_EV_CHARGERS,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            ),
             vol.Optional(CONF_EV_PREFIX, default="arccharger"): TextSelector(
                 TextSelectorConfig(type=TextSelectorType.TEXT)
             ),
@@ -343,8 +363,10 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_SERVER_URL: self.server_url,
                 CONF_CONFIG_MODE: self.config_mode,
                 CONF_SOLARMAN_PREFIX: self.solarman_prefix,
+                CONF_INVERTER_MODEL: self.inverter_model,
                 CONF_EV_ENABLED: self.ev_enabled,
                 CONF_EV_PREFIX: self.ev_prefix,
+                CONF_EV_MODEL: self.ev_model,
                 CONF_ENTITY_MAPPING: self.entity_mapping,
             },
         )

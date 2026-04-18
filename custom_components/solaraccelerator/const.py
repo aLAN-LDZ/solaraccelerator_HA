@@ -10,6 +10,8 @@ CONF_CONFIG_MODE = "config_mode"
 CONF_SOLARMAN_PREFIX = "solarman_prefix"
 CONF_EV_ENABLED = "ev_enabled"
 CONF_EV_PREFIX = "ev_prefix"
+CONF_INVERTER_MODEL = "inverter_model"
+CONF_EV_MODEL = "ev_model"
 
 # Configuration modes
 CONFIG_MODE_SOLARMAN = "solarman"
@@ -17,6 +19,15 @@ CONFIG_MODE_MANUAL = "manual"
 
 # Default values
 DEFAULT_SERVER_URL = "https://solaraccelerator.cloud"
+
+# Supported device models
+SUPPORTED_INVERTERS = [
+    {"value": "deye_sg0xlp3", "label": "Deye - SG0*LP3"},
+]
+
+SUPPORTED_EV_CHARGERS = [
+    {"value": "autel_maxicharger_ac_75kw", "label": "Autel - MaxiChargerAC 7.5KW"},
+]
 
 # Sensor attributes
 ATTR_LAST_SENT = "last_sent"

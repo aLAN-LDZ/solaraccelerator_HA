@@ -14,9 +14,10 @@
         }
       },
       "choose_mode": {
-        "title": "Wybierz tryb konfiguracji",
-        "description": "Wybierz sposób mapowania encji inwertera.\n\n**Solarman** - automatyczne mapowanie dla integracji Solarman. Wystarczy podać prefix encji.\n\n**Ręczne** - ręczny wybór każdej encji z Home Assistant.",
+        "title": "Wybierz falownik i tryb konfiguracji",
+        "description": "Wybierz model falownika i sposób mapowania encji.\n\n**Solarman** - automatyczne mapowanie dla integracji Solarman. Wystarczy podać prefix encji.\n\n**Ręczne** - ręczny wybór każdej encji z Home Assistant.",
         "data": {
+          "inverter_model": "Model falownika",
           "config_mode": "Tryb konfiguracji"
         }
       },
@@ -112,9 +113,10 @@
       },
       "ev_charger": {
         "title": "Ładowarka EV (OCPP)",
-        "description": "Jeśli masz ładowarkę EV zintegrowaną w HA przez OCPP (np. ARC Charger, Wallbox), włącz ją tutaj.\n\nWpisz prefix encji — to Charge Point ID z integracji OCPP.\n\nPrzykład: jeśli Twoje encje nazywają się `sensor.arccharger_power_active_import`, to prefix to `arccharger`.",
+        "description": "Jeśli masz ładowarkę EV zintegrowaną w HA przez OCPP (np. ARC Charger, Wallbox), włącz ją tutaj.\n\nWybierz model ładowarki i wpisz prefix encji — to Charge Point ID z integracji OCPP.\n\nPrzykład: jeśli Twoje encje nazywają się `sensor.arccharger_power_active_import`, to prefix to `arccharger`.",
         "data": {
           "ev_enabled": "Mam ładowarkę EV przez OCPP",
+          "ev_model": "Model ładowarki",
           "ev_prefix": "Prefix encji ładowarki"
         },
         "data_description": {

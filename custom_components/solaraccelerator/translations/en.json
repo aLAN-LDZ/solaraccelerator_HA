@@ -14,9 +14,10 @@
         }
       },
       "choose_mode": {
-        "title": "Choose Configuration Mode",
-        "description": "Choose how to map inverter entities.\n\n**Solarman** - automatic mapping for Solarman integration. Just provide the entity prefix.\n\n**Manual** - manually select each entity from Home Assistant.",
+        "title": "Choose Inverter & Configuration Mode",
+        "description": "Select your inverter model and how to map entities.\n\n**Solarman** - automatic mapping for Solarman integration. Just provide the entity prefix.\n\n**Manual** - manually select each entity from Home Assistant.",
         "data": {
+          "inverter_model": "Inverter model",
           "config_mode": "Configuration mode"
         }
       },
@@ -112,9 +113,10 @@
       },
       "ev_charger": {
         "title": "EV Charger (OCPP)",
-        "description": "If you have an EV charger integrated in HA via OCPP (e.g. ARC Charger, Wallbox), enable it here.\n\nEnter the entity prefix — this is the Charge Point ID from the OCPP integration.\n\nExample: if your entities are named `sensor.arccharger_power_active_import`, the prefix is `arccharger`.",
+        "description": "If you have an EV charger integrated in HA via OCPP (e.g. ARC Charger, Wallbox), enable it here.\n\nSelect your charger model and enter the entity prefix — this is the Charge Point ID from the OCPP integration.\n\nExample: if your entities are named `sensor.arccharger_power_active_import`, the prefix is `arccharger`.",
         "data": {
           "ev_enabled": "I have an EV charger via OCPP",
+          "ev_model": "Charger model",
           "ev_prefix": "Charger entity prefix"
         },
         "data_description": {
