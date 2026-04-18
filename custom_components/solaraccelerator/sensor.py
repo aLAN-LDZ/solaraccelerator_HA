@@ -789,11 +789,13 @@ async def async_send_data(
         if ev_enabled and ev_data:
             entities_payload["ev_charger"] = ev_data
 
-        payload = {
+        payload: dict[str, Any] = {
             "timestamp": dt_util.utcnow().isoformat(),
-            "entityPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
+            "inverterPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
             "entities": entities_payload,
         }
+        if ev_enabled:
+            payload["evPrefix"] = coordinator_data.get(CONF_EV_PREFIX, "")
 
         async with session.post(
             endpoint,
@@ -1099,9 +1101,11 @@ async def async_send_live_data(
 
         payload: dict[str, Any] = {
             "timestamp": dt_util.utcnow().isoformat(),
-            "entityPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
+            "inverterPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
             "entities": entities_payload,
         }
+        if ev_enabled:
+            payload["evPrefix"] = coordinator_data.get(CONF_EV_PREFIX, "")
 
         async with session.post(
             endpoint,
