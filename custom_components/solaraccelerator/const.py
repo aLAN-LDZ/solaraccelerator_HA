@@ -94,14 +94,13 @@ REQUIRED_ENTITIES = [
 
     # Ładowarka EV (OCPP) — klucze BEZ prefiksu ev_, kategoria daje kontekst
     ("status", "Status ładowarki", "-", "ev_charger"),
+    ("status_connector", "Status połączenia", "-", "ev_charger"),
+    ("vendor", "Producent ładowarki", "-", "ev_charger"),
     ("power_active_import", "Moc ładowania", "kW", "ev_charger"),
     ("energy_session", "Energia sesji", "kWh", "ev_charger"),
     ("energy_active_import_register", "Licznik energii", "kWh", "ev_charger"),
     ("current_import", "Prąd ładowania", "A", "ev_charger"),
     ("voltage", "Napięcie", "V", "ev_charger"),
-    ("frequency", "Częstotliwość", "Hz", "ev_charger"),
-    ("temperature", "Temperatura", "°C", "ev_charger"),
-    ("soc", "SoC auta", "%", "ev_charger"),
     ("time_session", "Czas sesji", "min", "ev_charger"),
     ("error_code", "Kod błędu", "-", "ev_charger"),
     ("transaction_id", "ID transakcji", "-", "ev_charger"),
@@ -182,14 +181,13 @@ def build_ocpp_entity_mapping(prefix: str) -> dict[str, str]:
     """
     return {
         "status": f"sensor.{prefix}_status",
+        "status_connector": f"sensor.{prefix}_status_connector",
+        "vendor": f"sensor.{prefix}_vendor",
         "power_active_import": f"sensor.{prefix}_power_active_import",
         "energy_session": f"sensor.{prefix}_energy_session",
         "energy_active_import_register": f"sensor.{prefix}_energy_active_import_register",
         "current_import": f"sensor.{prefix}_current_import",
         "voltage": f"sensor.{prefix}_voltage",
-        "frequency": f"sensor.{prefix}_frequency",
-        "temperature": f"sensor.{prefix}_temperature",
-        "soc": f"sensor.{prefix}_soc",
         "time_session": f"sensor.{prefix}_time_session",
         "error_code": f"sensor.{prefix}_error_code",
         "transaction_id": f"sensor.{prefix}_transaction_id",

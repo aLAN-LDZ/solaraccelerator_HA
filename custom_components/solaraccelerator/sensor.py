@@ -708,14 +708,14 @@ def convert_value(value: str | None, entity_key: str) -> float | int | bool | st
         return value
 
     # Encje EV, których wartości są tekstowe
-    if entity_key in ("status", "error_code", "transaction_id"):
+    if entity_key in ("status", "status_connector", "vendor", "error_code", "transaction_id"):
         return value
 
     try:
         float_val = float(value)
         if float_val.is_integer():
             return int(float_val)
-        return float_val
+        return round(float_val, 2)
     except (ValueError, TypeError):
         return 0
 
