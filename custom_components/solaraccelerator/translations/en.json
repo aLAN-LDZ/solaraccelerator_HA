@@ -14,15 +14,16 @@
         }
       },
       "choose_mode": {
-        "title": "Choose Configuration Mode",
-        "description": "Choose how to map inverter entities.\n\n**Solarman** - automatic mapping for Solarman integration. Just provide the entity prefix.\n\n**Manual** - manually select each entity from Home Assistant.",
+        "title": "Inverter - Model & Configuration",
+        "description": "Select your inverter model and how to map entities.\n\n**Prefix** - automatic mapping for Solarman integration. Just provide the entity prefix.\n\n**Manual** - manually select each entity from Home Assistant.",
         "data": {
+          "inverter_model": "Inverter model",
           "config_mode": "Configuration mode"
         }
       },
       "solarman_prefix": {
-        "title": "Solarman - Entity Prefix",
-        "description": "Enter the prefix used in Solarman integration.\n\nExample: if your entities are named `sensor.deye_pv1_power`, the prefix is `deye`.\n\nData will be sent automatically at every full hour.",
+        "title": "Inverter - Entity Prefix",
+        "description": "Enter the prefix used in Solarman integration.\n\nExample: if your entities are named `sensor.deye_pv1_power`, the prefix is `deye`.\n\nData is sent automatically at every full hour. Additionally, live data is pushed in real-time for accurate statistics.",
         "data": {
           "solarman_prefix": "Entity prefix"
         },
@@ -108,6 +109,48 @@
         "data": {
           "radiator_temp": "Radiator temperature (°C)",
           "dc_transformer_temp": "DC transformer temperature (°C)"
+        }
+      },
+      "ev_charger": {
+        "title": "EV Charger",
+        "description": "Do you have an EV charger integrated in Home Assistant via OCPP?",
+        "data": {
+          "ev_enabled": "I have an EV charger via OCPP"
+        }
+      },
+      "ev_choose_mode": {
+        "title": "EV Charger - Model & Configuration",
+        "description": "Select your charger model and how to map entities.\n\n**Prefix** - automatic mapping for OCPP integration. Just provide the entity prefix (Charge Point ID).\n\n**Manual** - manually select each entity from Home Assistant.",
+        "data": {
+          "ev_model": "Charger model",
+          "ev_config_mode": "Configuration mode"
+        }
+      },
+      "ev_prefix": {
+        "title": "EV Charger - Entity Prefix",
+        "description": "Enter the charger entity prefix — this is the Charge Point ID from the OCPP integration.\n\nExample: if your entities are named `sensor.arccharger_power_active_import`, the prefix is `arccharger`.",
+        "data": {
+          "ev_prefix": "Charger entity prefix"
+        },
+        "data_description": {
+          "ev_prefix": "e.g. arccharger, wallbox, chargepoint"
+        }
+      },
+      "entities_ev_charger": {
+        "title": "Entity Mapping - EV Charger",
+        "description": "Select Home Assistant entities corresponding to EV charger data (OCPP).\n\nAll entities must be mapped.",
+        "data": {
+          "status": "Charger status",
+          "status_connector": "Connector status",
+          "vendor": "Charger vendor",
+          "power_active_import": "Charging power (kW)",
+          "energy_session": "Session energy (kWh)",
+          "energy_active_import_register": "Energy register (kWh)",
+          "current_import": "Charging current (A)",
+          "voltage": "Voltage (V)",
+          "time_session": "Session time (min)",
+          "error_code": "Error code",
+          "transaction_id": "Transaction ID"
         }
       }
     },

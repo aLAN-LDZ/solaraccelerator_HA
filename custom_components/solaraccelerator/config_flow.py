@@ -30,13 +30,21 @@ from .const import (
     CONF_ENTITY_MAPPING,
     CONF_CONFIG_MODE,
     CONF_SOLARMAN_PREFIX,
+    CONF_EV_ENABLED,
+    CONF_EV_PREFIX,
+    CONF_EV_CONFIG_MODE,
+    CONF_INVERTER_MODEL,
+    CONF_EV_MODEL,
     CONFIG_MODE_SOLARMAN,
     CONFIG_MODE_MANUAL,
     DEFAULT_SERVER_URL,
     API_TEST_CONNECTION_ENDPOINT,
     REQUIRED_ENTITIES,
     ENTITY_CATEGORIES,
+    SUPPORTED_INVERTERS,
+    SUPPORTED_EV_CHARGERS,
     build_solarman_entity_mapping,
+    build_ocpp_entity_mapping,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -104,6 +112,11 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.server_url: str = DEFAULT_SERVER_URL
         self.config_mode: str = ""
         self.solarman_prefix: str = ""
+        self.inverter_model: str = ""
+        self.ev_enabled: bool = False
+        self.ev_config_mode: str = ""
+        self.ev_prefix: str = ""
+        self.ev_model: str = ""
         self.entity_mapping: dict[str, str] = {}
 
     async def async_step_user(
@@ -158,6 +171,7 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle configuration mode selection."""
         if user_input is not None:
             self.config_mode = user_input.get(CONF_CONFIG_MODE, CONFIG_MODE_MANUAL)
+            self.inverter_model = user_input.get(CONF_INVERTER_MODEL, "")
 
             if self.config_mode == CONFIG_MODE_SOLARMAN:
                 return await self.async_step_solarman_prefix()
@@ -165,10 +179,16 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_entities_pv()
 
         schema = vol.Schema({
+            vol.Required(CONF_INVERTER_MODEL): SelectSelector(
+                SelectSelectorConfig(
+                    options=SUPPORTED_INVERTERS,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            ),
             vol.Required(CONF_CONFIG_MODE, default=CONFIG_MODE_SOLARMAN): SelectSelector(
                 SelectSelectorConfig(
                     options=[
-                        {"value": CONFIG_MODE_SOLARMAN, "label": "Solarman (automatyczne mapowanie)"},
+                        {"value": CONFIG_MODE_SOLARMAN, "label": "Prefix (automatyczne mapowanie)"},
                         {"value": CONFIG_MODE_MANUAL, "label": "Ręczne mapowanie encji"},
                     ],
                     mode=SelectSelectorMode.LIST,
@@ -197,7 +217,7 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 self.solarman_prefix = prefix
                 self.entity_mapping = build_solarman_entity_mapping(prefix)
-                return self._create_entry()
+                return await self.async_step_ev_charger()
 
         schema = vol.Schema({
             vol.Required(CONF_SOLARMAN_PREFIX): TextSelector(
@@ -287,7 +307,100 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle temperature entity mapping."""
-        return await self._async_step_entities("temp", None, user_input)
+        return await self._async_step_entities("temp", "ev_charger", user_input)
+
+    async def async_step_ev_charger(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Ask if user has an OCPP EV charger."""
+        if user_input is not None:
+            self.ev_enabled = bool(user_input.get(CONF_EV_ENABLED, False))
+
+            if self.ev_enabled:
+                return await self.async_step_ev_choose_mode()
+            else:
+                return self._create_entry()
+
+        schema = vol.Schema({
+            vol.Required(CONF_EV_ENABLED, default=False): bool,
+        })
+
+        return self.async_show_form(
+            step_id="ev_charger",
+            data_schema=schema,
+        )
+
+    async def async_step_ev_choose_mode(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle EV charger model and configuration mode selection."""
+        if user_input is not None:
+            self.ev_model = user_input.get(CONF_EV_MODEL, "")
+            self.ev_config_mode = user_input.get(CONF_EV_CONFIG_MODE, CONFIG_MODE_MANUAL)
+
+            if self.ev_config_mode == CONFIG_MODE_SOLARMAN:
+                return await self.async_step_ev_prefix()
+            else:
+                return await self.async_step_entities_ev_charger()
+
+        schema = vol.Schema({
+            vol.Required(CONF_EV_MODEL, default=SUPPORTED_EV_CHARGERS[0]["value"]): SelectSelector(
+                SelectSelectorConfig(
+                    options=SUPPORTED_EV_CHARGERS,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Required(CONF_EV_CONFIG_MODE, default=CONFIG_MODE_SOLARMAN): SelectSelector(
+                SelectSelectorConfig(
+                    options=[
+                        {"value": CONFIG_MODE_SOLARMAN, "label": "Prefix (automatyczne mapowanie)"},
+                        {"value": CONFIG_MODE_MANUAL, "label": "Ręczne mapowanie encji"},
+                    ],
+                    mode=SelectSelectorMode.LIST,
+                )
+            ),
+        })
+
+        return self.async_show_form(
+            step_id="ev_choose_mode",
+            data_schema=schema,
+        )
+
+    async def async_step_ev_prefix(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle OCPP prefix input for EV charger."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            prefix = user_input.get(CONF_EV_PREFIX, "").strip().lower()
+
+            if not prefix:
+                errors[CONF_EV_PREFIX] = "prefix_required"
+            elif " " in prefix or not prefix.replace("_", "").isalnum():
+                errors[CONF_EV_PREFIX] = "invalid_prefix"
+            else:
+                self.ev_prefix = prefix
+                self.entity_mapping.update(build_ocpp_entity_mapping(prefix))
+                return self._create_entry()
+
+        schema = vol.Schema({
+            vol.Required(CONF_EV_PREFIX): TextSelector(
+                TextSelectorConfig(type=TextSelectorType.TEXT)
+            ),
+        })
+
+        return self.async_show_form(
+            step_id="ev_prefix",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_entities_ev_charger(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle manual EV charger entity mapping."""
+        return await self._async_step_entities("ev_charger", None, user_input)
 
     def _create_entry(self) -> FlowResult:
         """Create the config entry."""
@@ -302,6 +415,11 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_SERVER_URL: self.server_url,
                 CONF_CONFIG_MODE: self.config_mode,
                 CONF_SOLARMAN_PREFIX: self.solarman_prefix,
+                CONF_INVERTER_MODEL: self.inverter_model,
+                CONF_EV_ENABLED: self.ev_enabled,
+                CONF_EV_CONFIG_MODE: self.ev_config_mode,
+                CONF_EV_PREFIX: self.ev_prefix,
+                CONF_EV_MODEL: self.ev_model,
                 CONF_ENTITY_MAPPING: self.entity_mapping,
             },
         )

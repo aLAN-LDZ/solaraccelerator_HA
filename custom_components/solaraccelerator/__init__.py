@@ -11,6 +11,8 @@ from .const import (
     CONF_SERVER_URL,
     CONF_ENTITY_MAPPING,
     CONF_SOLARMAN_PREFIX,
+    CONF_EV_ENABLED,
+    CONF_EV_PREFIX,
     DEFAULT_LIVE_INTERVAL,
 )
 
@@ -29,6 +31,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_SERVER_URL: entry.data.get(CONF_SERVER_URL),
         CONF_ENTITY_MAPPING: entry.data.get(CONF_ENTITY_MAPPING, {}),
         CONF_SOLARMAN_PREFIX: entry.data.get(CONF_SOLARMAN_PREFIX, ""),
+        CONF_EV_ENABLED: entry.data.get(CONF_EV_ENABLED, False),
+        CONF_EV_PREFIX: entry.data.get(CONF_EV_PREFIX, ""),
         "last_sent": None,
         "next_scheduled": None,
         "last_response": None,

@@ -8,6 +8,11 @@ CONF_SERVER_URL = "server_url"
 CONF_ENTITY_MAPPING = "entity_mapping"
 CONF_CONFIG_MODE = "config_mode"
 CONF_SOLARMAN_PREFIX = "solarman_prefix"
+CONF_EV_ENABLED = "ev_enabled"
+CONF_EV_PREFIX = "ev_prefix"
+CONF_EV_CONFIG_MODE = "ev_config_mode"
+CONF_INVERTER_MODEL = "inverter_model"
+CONF_EV_MODEL = "ev_model"
 
 # Configuration modes
 CONFIG_MODE_SOLARMAN = "solarman"
@@ -15,6 +20,15 @@ CONFIG_MODE_MANUAL = "manual"
 
 # Default values
 DEFAULT_SERVER_URL = "https://solaraccelerator.cloud"
+
+# Supported device models
+SUPPORTED_INVERTERS = [
+    {"value": "deye_sg0xlp3", "label": "Deye - SG0*LP3"},
+]
+
+SUPPORTED_EV_CHARGERS = [
+    {"value": "autel_maxicharger_ac_75kw", "label": "Autel - MaxiChargerAC 7.5KW"},
+]
 
 # Sensor attributes
 ATTR_LAST_SENT = "last_sent"
@@ -30,6 +44,7 @@ API_LIVE_ENDPOINT = "/api/homeassistant/live"
 API_DATA_READY_ENDPOINT = "/api/homeassistant/data-ready"
 API_PRICES_ENDPOINT = "/api/homeassistant/prices"
 API_PROFIT_ENDPOINT = "/api/homeassistant/profit"
+API_COMMAND_ACK_ENDPOINT = "/api/homeassistant/commands/{id}/ack"
 
 # Live channel defaults
 DEFAULT_LIVE_INTERVAL = 15  # seconds — used until server tells us the real interval
@@ -88,7 +103,28 @@ REQUIRED_ENTITIES = [
     # Temperatury
     ("radiator_temp", "Temperatura radiatora", "°C", "temp"),
     ("dc_transformer_temp", "Temperatura transformatora DC", "°C", "temp"),
+
+    # Ładowarka EV (OCPP) — klucze BEZ prefiksu ev_, kategoria daje kontekst
+    ("status", "Status ładowarki", "-", "ev_charger"),
+    ("status_connector", "Status połączenia", "-", "ev_charger"),
+    ("vendor", "Producent ładowarki", "-", "ev_charger"),
+    ("power_active_import", "Moc ładowania", "kW", "ev_charger"),
+    ("energy_session", "Energia sesji", "kWh", "ev_charger"),
+    ("energy_active_import_register", "Licznik energii", "kWh", "ev_charger"),
+    ("current_import", "Prąd ładowania", "A", "ev_charger"),
+    ("voltage", "Napięcie", "V", "ev_charger"),
+    ("time_session", "Czas sesji", "min", "ev_charger"),
+    ("error_code", "Kod błędu", "-", "ev_charger"),
+    ("transaction_id", "ID transakcji", "-", "ev_charger"),
 ]
+
+# Encje falownika (wszystko poza ev_charger)
+INVERTER_ENTITIES = [e for e in REQUIRED_ENTITIES if e[3] != "ev_charger"]
+INVERTER_KEYS = [e[0] for e in INVERTER_ENTITIES]
+
+# Encje EV
+EV_ENTITIES = [e for e in REQUIRED_ENTITIES if e[3] == "ev_charger"]
+EV_ENTITY_KEYS = [e[0] for e in EV_ENTITIES]
 
 # Entity keys for easy access
 ENTITY_KEYS = [entity[0] for entity in REQUIRED_ENTITIES]
@@ -101,6 +137,7 @@ ENTITY_CATEGORIES = {
     "grid": "Sieć",
     "load": "Obciążenie",
     "temp": "Temperatury",
+    "ev_charger": "Ładowarka EV",
 }
 
 
@@ -145,4 +182,25 @@ def build_solarman_entity_mapping(prefix: str) -> dict[str, str]:
         "load_frequency": f"sensor.{prefix}_grid_frequency",
         "radiator_temp": f"sensor.{prefix}_temperature",
         "dc_transformer_temp": f"sensor.{prefix}_dc_temperature",
+    }
+
+
+def build_ocpp_entity_mapping(prefix: str) -> dict[str, str]:
+    """Build entity mapping for OCPP charger integration based on prefix.
+
+    Expects standard OCPP HACS integration naming: sensor.{prefix}_{field}
+    where {prefix} is the Charge Point ID (e.g. "arccharger").
+    """
+    return {
+        "status": f"sensor.{prefix}_status",
+        "status_connector": f"sensor.{prefix}_status_connector",
+        "vendor": f"sensor.{prefix}_vendor",
+        "power_active_import": f"sensor.{prefix}_power_active_import",
+        "energy_session": f"sensor.{prefix}_energy_session",
+        "energy_active_import_register": f"sensor.{prefix}_energy_active_import_register",
+        "current_import": f"sensor.{prefix}_current_import",
+        "voltage": f"sensor.{prefix}_voltage",
+        "time_session": f"sensor.{prefix}_time_session",
+        "error_code": f"sensor.{prefix}_error_code",
+        "transaction_id": f"sensor.{prefix}_transaction_id",
     }

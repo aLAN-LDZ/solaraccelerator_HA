@@ -23,12 +23,17 @@ from .const import (
     CONF_SERVER_URL,
     CONF_ENTITY_MAPPING,
     CONF_SOLARMAN_PREFIX,
+    CONF_EV_ENABLED,
+    CONF_EV_PREFIX,
     API_SEND_DATA_ENDPOINT,
     API_LIVE_ENDPOINT,
     API_DATA_READY_ENDPOINT,
     API_PRICES_ENDPOINT,
     API_PROFIT_ENDPOINT,
-    ENTITY_KEYS,
+    API_COMMAND_ACK_ENDPOINT,
+    INVERTER_KEYS,
+    EV_ENTITY_KEYS,
+    REQUIRED_ENTITIES,
     DEFAULT_LIVE_INTERVAL,
     LIVE_DISABLED_RETRY,
     LIVE_AUTH_RETRY,
@@ -210,6 +215,64 @@ class SolarAcceleratorEntitiesCountSensor(SolarAcceleratorSensorBase):
     def native_value(self) -> int:
         """Return the state."""
         return self.coordinator_data.get("entities_sent", 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Szczegóły wysyłanych encji z podziałem na falownik i ładowarkę."""
+        entity_mapping = self.coordinator_data.get(CONF_ENTITY_MAPPING, {})
+        ev_enabled = bool(
+            self.coordinator_data.get(CONF_EV_ENABLED)
+            and self.coordinator_data.get(CONF_EV_PREFIX)
+        )
+
+        inverter_entities: list[str] = []
+        inverter_missing: list[str] = []
+        ev_entities: list[str] = []
+        ev_missing: list[str] = []
+
+        ev_keys_set = set(EV_ENTITY_KEYS)
+
+        for key, desc, unit, category in REQUIRED_ENTITIES:
+            is_ev = key in ev_keys_set
+            ha_id = entity_mapping.get(key)
+
+            if is_ev:
+                if not ev_enabled:
+                    continue
+                if ha_id:
+                    state = self.hass.states.get(ha_id)
+                    if state and state.state not in ("unknown", "unavailable"):
+                        ev_entities.append(f"ev_charger.{key} → {ha_id}")
+                    else:
+                        ev_missing.append(f"ev_charger.{key} → {ha_id} (brak stanu)")
+                else:
+                    ev_missing.append(f"ev_charger.{key}")
+            else:
+                if ha_id:
+                    state = self.hass.states.get(ha_id)
+                    if state and state.state not in ("unknown", "unavailable"):
+                        inverter_entities.append(f"inverter.{key} → {ha_id}")
+                    else:
+                        inverter_missing.append(f"inverter.{key} → {ha_id} (brak stanu)")
+                else:
+                    inverter_missing.append(f"inverter.{key}")
+
+        attrs: dict[str, Any] = {
+            "falownik_aktywne": len(inverter_entities),
+            "falownik_brakujące": len(inverter_missing),
+            "falownik_lista": inverter_entities,
+            "falownik_brak": inverter_missing,
+        }
+        if ev_enabled:
+            attrs["ev_aktywne"] = len(ev_entities)
+            attrs["ev_brakujące"] = len(ev_missing)
+            attrs["ev_lista"] = ev_entities
+            attrs["ev_brak"] = ev_missing
+            attrs["ev_prefix"] = self.coordinator_data.get(CONF_EV_PREFIX)
+        else:
+            attrs["ev_enabled"] = False
+
+        return attrs
 
 
 # Price sensors
@@ -644,11 +707,15 @@ def convert_value(value: str | None, entity_key: str) -> float | int | bool | st
     if entity_key == "inverter_status":
         return value
 
+    # Encje EV, których wartości są tekstowe
+    if entity_key in ("status", "status_connector", "vendor", "error_code", "transaction_id"):
+        return value
+
     try:
         float_val = float(value)
         if float_val.is_integer():
             return int(float_val)
-        return float_val
+        return round(float_val, 2)
     except (ValueError, TypeError):
         return 0
 
@@ -679,27 +746,53 @@ async def async_send_data(
     session = async_get_clientsession(hass)
     endpoint = f"{server_url}{API_SEND_DATA_ENDPOINT}"
 
+    ev_enabled = bool(
+        coordinator_data.get(CONF_EV_ENABLED)
+        and coordinator_data.get(CONF_EV_PREFIX)
+    )
+
     try:
-        entities_data = {}
+        inverter_data: dict[str, Any] = {}
+        ev_data: dict[str, Any] = {}
         entities_count = 0
 
-        for entity_key in ENTITY_KEYS:
+        for entity_key in INVERTER_KEYS:
             ha_entity_id = entity_mapping.get(entity_key)
             if ha_entity_id:
                 state = hass.states.get(ha_entity_id)
                 if state:
                     value = convert_value(state.state, entity_key)
-                    entities_data[entity_key] = value
+                    inverter_data[entity_key] = value
                     entities_count += 1
                 else:
-                    entities_data[entity_key] = 0
+                    inverter_data[entity_key] = 0
             else:
-                entities_data[entity_key] = 0
+                inverter_data[entity_key] = 0
+
+        if ev_enabled:
+            for entity_key in EV_ENTITY_KEYS:
+                ha_entity_id = entity_mapping.get(entity_key)
+                if ha_entity_id:
+                    state = hass.states.get(ha_entity_id)
+                    if state:
+                        value = convert_value(state.state, entity_key)
+                        ev_data[entity_key] = value
+                        entities_count += 1
+                    else:
+                        ev_data[entity_key] = 0
+                else:
+                    ev_data[entity_key] = 0
+
+        entities_payload: dict[str, Any] = {
+            "inverter": inverter_data,
+        }
+        if ev_enabled and ev_data:
+            entities_payload["ev_charger"] = ev_data
 
         payload = {
             "timestamp": dt_util.utcnow().isoformat(),
             "entityPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
-            "entities": entities_data,
+            "entities": entities_payload,
         }
 
         async with session.post(
@@ -952,11 +1045,12 @@ async def async_send_data_hourly(
 async def async_send_live_data(
     hass: HomeAssistant,
     coordinator_data: dict[str, Any],
-) -> tuple[str, int | None, int | None]:
+) -> tuple[str, int | None, int | None, list[dict[str, Any]]]:
     """Send live data to /api/homeassistant/live.
 
-    Returns (status, live_interval_seconds, retry_after_seconds).
+    Returns (status, live_interval_seconds, retry_after_seconds, pending_commands).
     status values: "ok" | "disabled" | "rate_limited" | "auth_error" | "error"
+    pending_commands: lista komend do wykonania (tylko gdy status == "ok").
     """
     api_key = coordinator_data.get(CONF_API_KEY)
     server_url = coordinator_data.get(CONF_SERVER_URL)
@@ -965,23 +1059,48 @@ async def async_send_live_data(
     session = async_get_clientsession(hass)
     endpoint = f"{server_url}{API_LIVE_ENDPOINT}"
 
+    ev_enabled = bool(
+        coordinator_data.get(CONF_EV_ENABLED)
+        and coordinator_data.get(CONF_EV_PREFIX)
+    )
+
     try:
-        entities_data: dict[str, Any] = {}
-        for entity_key in ENTITY_KEYS:
+        inverter_data: dict[str, Any] = {}
+        ev_data: dict[str, Any] = {}
+
+        for entity_key in INVERTER_KEYS:
             ha_entity_id = entity_mapping.get(entity_key)
             if ha_entity_id:
                 state = hass.states.get(ha_entity_id)
                 if state:
-                    entities_data[entity_key] = convert_value(state.state, entity_key)
+                    inverter_data[entity_key] = convert_value(state.state, entity_key)
                 else:
-                    entities_data[entity_key] = 0
+                    inverter_data[entity_key] = 0
             else:
-                entities_data[entity_key] = 0
+                inverter_data[entity_key] = 0
 
-        payload = {
+        if ev_enabled:
+            for entity_key in EV_ENTITY_KEYS:
+                ha_entity_id = entity_mapping.get(entity_key)
+                if ha_entity_id:
+                    state = hass.states.get(ha_entity_id)
+                    if state:
+                        ev_data[entity_key] = convert_value(state.state, entity_key)
+                    else:
+                        ev_data[entity_key] = 0
+                else:
+                    ev_data[entity_key] = 0
+
+        entities_payload: dict[str, Any] = {
+            "inverter": inverter_data,
+        }
+        if ev_enabled and ev_data:
+            entities_payload["ev_charger"] = ev_data
+
+        payload: dict[str, Any] = {
             "timestamp": dt_util.utcnow().isoformat(),
             "entityPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
-            "entities": entities_data,
+            "entities": entities_payload,
         }
 
         async with session.post(
@@ -1000,13 +1119,18 @@ async def async_send_live_data(
                 coordinator_data["live_last_push"] = dt_util.now().strftime("%Y-%m-%d %H:%M:%S")
                 if live_interval:
                     coordinator_data["live_interval_seconds"] = live_interval
-                _LOGGER.debug("Live push OK: %d entities", data.get("entitiesReceived", 0))
-                return ("ok", live_interval, None)
+                pending_commands = data.get("pending_commands", []) or []
+                _LOGGER.debug(
+                    "Live push OK: %d entities, %d pending commands",
+                    data.get("entitiesReceived", 0),
+                    len(pending_commands),
+                )
+                return ("ok", live_interval, None, pending_commands)
 
             elif resp.status == 503:
                 coordinator_data["live_status"] = "disabled"
                 _LOGGER.debug("Live channel disabled on server (503)")
-                return ("disabled", None, None)
+                return ("disabled", None, None, [])
 
             elif resp.status == 429:
                 coordinator_data["live_status"] = "rate_limited"
@@ -1025,31 +1149,94 @@ async def async_send_live_data(
                     "Live rate limited, retry after %ds, server interval=%s",
                     retry_after, live_interval
                 )
-                return ("rate_limited", live_interval, retry_after)
+                return ("rate_limited", live_interval, retry_after, [])
 
             elif resp.status == 401:
                 coordinator_data["live_status"] = "auth_error"
                 _LOGGER.error("Live push: invalid API key (401)")
-                return ("auth_error", None, None)
+                return ("auth_error", None, None, [])
 
             else:
                 coordinator_data["live_status"] = "error"
                 text = await resp.text()
                 _LOGGER.error("Live push failed: %s - %s", resp.status, text[:100])
-                return ("error", None, None)
+                return ("error", None, None, [])
 
     except asyncio.TimeoutError:
         coordinator_data["live_status"] = "error"
         _LOGGER.warning("Live push timeout")
-        return ("error", None, None)
+        return ("error", None, None, [])
     except aiohttp.ClientError as e:
         coordinator_data["live_status"] = "error"
         _LOGGER.warning("Live push connection error: %s", e)
-        return ("error", None, None)
+        return ("error", None, None, [])
     except Exception as e:
         coordinator_data["live_status"] = "error"
         _LOGGER.exception("Live push unexpected error: %s", e)
-        return ("error", None, None)
+        return ("error", None, None, [])
+
+
+async def async_execute_command(
+    hass: HomeAssistant,
+    cmd: dict[str, Any],
+) -> tuple[bool, str | None]:
+    """Wykonaj komendę HA przez hass.services.async_call.
+
+    Zwraca (success, error_message).
+    """
+    domain = cmd.get("domain")
+    service = cmd.get("service")
+    entity_id = cmd.get("entity_id")
+    service_data = cmd.get("service_data") or {}
+
+    if not domain or not service or not entity_id:
+        return (False, "Invalid command: missing domain/service/entity_id")
+
+    try:
+        await hass.services.async_call(
+            domain,
+            service,
+            {"entity_id": entity_id, **service_data},
+            blocking=True,
+        )
+        _LOGGER.info("Command executed: %s.%s on %s", domain, service, entity_id)
+        return (True, None)
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {e}"
+        _LOGGER.error("Command failed (%s.%s on %s): %s", domain, service, entity_id, error_msg)
+        return (False, error_msg[:500])
+
+
+async def async_ack_command(
+    hass: HomeAssistant,
+    coordinator_data: dict[str, Any],
+    cmd_id: str,
+    success: bool,
+    error: str | None,
+) -> None:
+    """Wyślij ACK do serwera po wykonaniu komendy."""
+    api_key = coordinator_data.get(CONF_API_KEY)
+    server_url = coordinator_data.get(CONF_SERVER_URL)
+    session = async_get_clientsession(hass)
+    endpoint = f"{server_url}{API_COMMAND_ACK_ENDPOINT.replace('{id}', cmd_id)}"
+
+    try:
+        async with session.post(
+            endpoint,
+            json={"success": success, "error": error},
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                _LOGGER.warning("ACK for %s failed: %s - %s", cmd_id, resp.status, text[:100])
+            else:
+                _LOGGER.debug("ACK for %s sent (success=%s)", cmd_id, success)
+    except Exception as e:
+        _LOGGER.warning("ACK for %s connection error: %s", cmd_id, e)
 
 
 async def async_send_live_data_loop(
@@ -1063,7 +1250,7 @@ async def async_send_live_data_loop(
 
     while True:
         try:
-            status, server_interval, retry_after = await async_send_live_data(
+            status, server_interval, retry_after, pending_commands = await async_send_live_data(
                 hass, coordinator_data
             )
 
@@ -1073,6 +1260,12 @@ async def async_send_live_data_loop(
                 interval = server_interval
 
             if status == "ok":
+                for cmd in pending_commands:
+                    cmd_id = cmd.get("id")
+                    if not cmd_id:
+                        continue
+                    success, error_msg = await async_execute_command(hass, cmd)
+                    await async_ack_command(hass, coordinator_data, cmd_id, success, error_msg)
                 await asyncio.sleep(interval)
 
             elif status == "disabled":
