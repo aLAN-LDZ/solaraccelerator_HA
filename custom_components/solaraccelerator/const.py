@@ -1,8 +1,15 @@
-"""Constants for the Solar Accelerator integration."""
+"""Stałe globalne integracji Solar Accelerator.
+
+Trzy główne grupy:
+- klucze konfiguracji (``CONF_*``) — używane w config flow i ``entry.data``,
+- endpointy backendu (``API_*``)   — relatywne ścieżki na serwerze,
+- definicja wymaganych encji       — lista pól które wysyłamy do API + helpery
+  budujące domyślne mapowania dla integracji Solarman i OCPP.
+"""
 
 DOMAIN = "solaraccelerator"
 
-# Config flow
+# === Klucze konfiguracji (config flow + entry.data) ===
 CONF_API_KEY = "api_key"
 CONF_SERVER_URL = "server_url"
 CONF_ENTITY_MAPPING = "entity_mapping"
@@ -14,14 +21,16 @@ CONF_EV_CONFIG_MODE = "ev_config_mode"
 CONF_INVERTER_MODEL = "inverter_model"
 CONF_EV_MODEL = "ev_model"
 
-# Configuration modes
+# Tryby konfiguracji wybierane w config flow:
+# - SOLARMAN: użytkownik podaje prefix integracji Solarman/OCPP a my budujemy mapowanie automatycznie
+# - MANUAL:   użytkownik mapuje każdą encję ręcznie
 CONFIG_MODE_SOLARMAN = "solarman"
 CONFIG_MODE_MANUAL = "manual"
 
-# Default values
+# Domyślny URL backendu (można nadpisać w config flow np. dla self-hosted)
 DEFAULT_SERVER_URL = "https://solaraccelerator.cloud"
 
-# Supported device models
+# === Wspierane modele urządzeń (lista rośnie z czasem) ===
 SUPPORTED_INVERTERS = [
     {"value": "deye_sg0xlp3", "label": "Deye - SG0*LP3"},
 ]
@@ -30,14 +39,14 @@ SUPPORTED_EV_CHARGERS = [
     {"value": "autel_maxicharger_ac_75kw", "label": "Autel - MaxiChargerAC 7.5KW"},
 ]
 
-# Sensor attributes
+# Klucze atrybutów sensorów — używane do referencji w innych miejscach
 ATTR_LAST_SENT = "last_sent"
 ATTR_LAST_RECEIVED = "last_received"
 ATTR_CONNECTION_STATUS = "connection_status"
 ATTR_ENTITIES_COUNT = "entities_count"
 ATTR_NEXT_SCHEDULED = "next_scheduled"
 
-# API endpoints
+# === Endpointy backendu (ścieżki względne, base URL trzyma config flow) ===
 API_TEST_CONNECTION_ENDPOINT = "/api/homeassistant/test-connection"
 API_SEND_DATA_ENDPOINT = "/api/homeassistant/send-data"
 API_LIVE_ENDPOINT = "/api/homeassistant/live"
@@ -46,13 +55,20 @@ API_PRICES_ENDPOINT = "/api/homeassistant/prices"
 API_PROFIT_ENDPOINT = "/api/homeassistant/profit"
 API_COMMAND_ACK_ENDPOINT = "/api/homeassistant/commands/{id}/ack"
 
-# Live channel defaults
-DEFAULT_LIVE_INTERVAL = 15  # seconds — used until server tells us the real interval
-LIVE_DISABLED_RETRY = 60    # seconds to wait when server returns 503
-LIVE_AUTH_RETRY = 300       # seconds to wait after auth failure
+# === Ustawienia kanału live ===
+# Wartość początkowa interwału — używana zanim serwer poda właściwą w odpowiedzi
+DEFAULT_LIVE_INTERVAL = 15
+# Po HTTP 503 (admin wyłączył kanał) — sprawdzamy ponownie co minutę
+LIVE_DISABLED_RETRY = 60
+# Po HTTP 401 (zły klucz API) — długa pauza, żeby nie zalewać serwera
+LIVE_AUTH_RETRY = 300
 
-# All 36 required entities for SolarAccelerator API
+# Lista wszystkich pól które integracja może wysyłać do backendu.
 # Format: (key, description, unit, category)
+# - ``key``         — nazwa pola w payloadzie API,
+# - ``description`` — czytelny opis (używany w UI config flow),
+# - ``unit``        — jednostka (informacyjnie),
+# - ``category``    — przypisuje encję do jednej grupy w config flow (pv/battery/...).
 REQUIRED_ENTITIES = [
     # PV (Panele fotowoltaiczne)
     ("day_pv_energy", "Dzienna produkcja PV", "kWh", "pv"),
@@ -118,18 +134,18 @@ REQUIRED_ENTITIES = [
     ("transaction_id", "ID transakcji", "-", "ev_charger"),
 ]
 
-# Encje falownika (wszystko poza ev_charger)
+# Encje falownika — wszystko z REQUIRED_ENTITIES poza kategorią ev_charger
 INVERTER_ENTITIES = [e for e in REQUIRED_ENTITIES if e[3] != "ev_charger"]
 INVERTER_KEYS = [e[0] for e in INVERTER_ENTITIES]
 
-# Encje EV
+# Encje ładowarki EV (OCPP) — wydzielone, bo wysyłane tylko gdy użytkownik włączył EV
 EV_ENTITIES = [e for e in REQUIRED_ENTITIES if e[3] == "ev_charger"]
 EV_ENTITY_KEYS = [e[0] for e in EV_ENTITIES]
 
-# Entity keys for easy access
+# Wszystkie klucze encji w jednej liście — pomocnicze
 ENTITY_KEYS = [entity[0] for entity in REQUIRED_ENTITIES]
 
-# Grouped entities by category
+# Mapowanie kategorii na czytelne nazwy używane w UI config flow
 ENTITY_CATEGORIES = {
     "pv": "Panele fotowoltaiczne (PV)",
     "battery": "Bateria",
@@ -142,7 +158,12 @@ ENTITY_CATEGORIES = {
 
 
 def build_solarman_entity_mapping(prefix: str) -> dict[str, str]:
-    """Build entity mapping for Solarman integration based on prefix."""
+    """Zbuduj mapowanie encji dla integracji Solarman na podstawie podanego prefixu.
+
+    Integracja Solarman (HACS) używa konwencji nazewnictwa ``sensor.{prefix}_{field}``.
+    Funkcja zwraca słownik klucz_API → entity_id HA, który użytkownik może później
+    skorygować ręcznie jeśli któryś z domyślnych identyfikatorów nie pasuje.
+    """
     return {
         "day_pv_energy": f"sensor.{prefix}_today_production",
         "pv1_power": f"sensor.{prefix}_pv1_power",
@@ -186,10 +207,11 @@ def build_solarman_entity_mapping(prefix: str) -> dict[str, str]:
 
 
 def build_ocpp_entity_mapping(prefix: str) -> dict[str, str]:
-    """Build entity mapping for OCPP charger integration based on prefix.
+    """Zbuduj mapowanie encji ładowarki EV dla integracji OCPP na podstawie prefixu.
 
-    Expects standard OCPP HACS integration naming: sensor.{prefix}_{field}
-    where {prefix} is the Charge Point ID (e.g. "arccharger").
+    Integracja OCPP (HACS) tworzy encje w schemacie ``sensor.{prefix}_{field}``,
+    gdzie ``{prefix}`` to Charge Point ID (np. ``arccharger``). Tak jak przy Solarmanie
+    użytkownik może później ręcznie poprawić każdy wpis w trybie manualnym.
     """
     return {
         "status": f"sensor.{prefix}_status",
