@@ -26,13 +26,16 @@ from .const import (
     CONF_SOLARMAN_PREFIX,
     CONF_EV_ENABLED,
     CONF_EV_PREFIX,
+    DEFAULT_COMMAND_DELAY,
     DEFAULT_LIVE_INTERVAL,
+    DEFAULT_VERIFY_SETTLING,
 )
+from .write_manager import WriteManager
 
 LOGGER = logging.getLogger(__name__)
 
 # Platformy HA które ładuje ta integracja (każda ma swój plik async_setup_entry)
-PLATFORMS = ["sensor", "button"]
+PLATFORMS = ["sensor", "button", "number"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -88,7 +91,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "updated_at": None,
         },
         "profit_last_update": None,
+        # Wartości encji konfiguracyjnych write_managera — nadpisywane przez encje number
+        # przy starcie (z RestoreEntity) i przy każdej zmianie z UI.
+        "command_delay": DEFAULT_COMMAND_DELAY,
+        "verify_settling": DEFAULT_VERIFY_SETTLING,
     }
+
+    # WriteManager — kolejka komend do falownika z worker'em w tle.
+    # Tworzymy przed forward_entry_setups, żeby platformy mogły do niej trafić przez coordinator_data.
+    write_manager = WriteManager(hass, entry, hass.data[DOMAIN][entry.entry_id])
+    hass.data[DOMAIN][entry.entry_id]["write_manager"] = write_manager
+    write_manager.start()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -96,7 +109,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Wyładuj integrację — anuluj taski w tle i odepnij platformy."""
+    """Wyładuj integrację — anuluj taski w tle, zatrzymaj write_manager i odepnij platformy."""
     coordinator_data = hass.data[DOMAIN].get(entry.entry_id, {})
 
     # Anuluj obie pętle w tle — inaczej zostałyby "wiszące" po reloadzie
@@ -104,6 +117,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         task.cancel()
     if live_task := coordinator_data.get("_live_task"):
         live_task.cancel()
+
+    # Zatrzymaj worker'a write_managera
+    if write_manager := coordinator_data.get("write_manager"):
+        write_manager.stop()
 
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)

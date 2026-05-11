@@ -63,6 +63,20 @@ LIVE_DISABLED_RETRY = 60
 # Po HTTP 401 (zły klucz API) — długa pauza, żeby nie zalewać serwera
 LIVE_AUTH_RETRY = 300
 
+# === Write manager — kolejka komend wysyłanych do falownika ===
+# Falownik (Modbus przez Solarman) nie nadąża gdy uderza w niego kilka write naraz —
+# część komend jest odrzucana. Dlatego komendy idą przez kolejkę z dwoma opóźnieniami:
+#   1. ``command_delay`` — pauza między kolejnymi write w obrębie jednej batch'y,
+#   2. ``verify_settling`` — pauza po ostatnim write, zanim odczytamy wartości do weryfikacji.
+# Obie wartości są wystawione jako encje number, żeby tunować je w UI bez restartu integracji.
+DEFAULT_COMMAND_DELAY = 1.5      # sekund między write
+MIN_COMMAND_DELAY = 0.1
+MAX_COMMAND_DELAY = 10.0
+
+DEFAULT_VERIFY_SETTLING = 5.0    # sekund od ostatniego write do pierwszego verify
+MIN_VERIFY_SETTLING = 1.0
+MAX_VERIFY_SETTLING = 60.0
+
 # Lista wszystkich pól które integracja może wysyłać do backendu.
 # Format: (key, description, unit, category)
 # - ``key``         — nazwa pola w payloadzie API,

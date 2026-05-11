@@ -21,14 +21,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .api import (
-    async_ack_command,
     async_check_data_ready,
     async_fetch_prices,
     async_fetch_profit,
     async_send_data,
     async_send_live_data,
 )
-from .commands import async_execute_command
 from .const import (
     DEFAULT_LIVE_INTERVAL,
     LIVE_AUTH_RETRY,
@@ -145,13 +143,11 @@ async def async_send_live_data_loop(
                 interval = server_interval
 
             if status == "ok":
-                # Wykonaj każdą komendę z kolejki i potwierdź wynik serwerowi
-                for cmd in pending_commands:
-                    cmd_id = cmd.get("id")
-                    if not cmd_id:
-                        continue
-                    success, error_msg = await async_execute_command(hass, cmd)
-                    await async_ack_command(hass, coordinator_data, cmd_id, success, error_msg)
+                # Komendy nie wykonujemy tu od razu — wrzucamy do kolejki write_managera.
+                # Worker w tle przetworzy batch (execute → settling → verify → ACK),
+                # a my możemy od razu wracać do kolejnego live pushu bez blokowania.
+                if pending_commands and (write_manager := coordinator_data.get("write_manager")):
+                    write_manager.enqueue(pending_commands)
                 await asyncio.sleep(interval)
 
             elif status == "disabled":
