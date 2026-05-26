@@ -261,6 +261,9 @@
       },
       "verify_settling": {
         "name": "Opóźnienie przed verify"
+      },
+      "verify_retries": {
+        "name": "Liczba prób verify"
       }
     }
   }

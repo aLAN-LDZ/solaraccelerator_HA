@@ -28,11 +28,14 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
     DEFAULT_COMMAND_DELAY,
+    DEFAULT_VERIFY_RETRIES,
     DEFAULT_VERIFY_SETTLING,
     DOMAIN,
     MAX_COMMAND_DELAY,
+    MAX_VERIFY_RETRIES,
     MAX_VERIFY_SETTLING,
     MIN_COMMAND_DELAY,
+    MIN_VERIFY_RETRIES,
     MIN_VERIFY_SETTLING,
 )
 
@@ -50,6 +53,7 @@ async def async_setup_entry(
     async_add_entities([
         SolarAcceleratorCommandDelayNumber(hass, entry, coordinator_data),
         SolarAcceleratorVerifySettlingNumber(hass, entry, coordinator_data),
+        SolarAcceleratorVerifyRetriesNumber(hass, entry, coordinator_data),
     ])
 
 
@@ -156,3 +160,25 @@ class SolarAcceleratorVerifySettlingNumber(_ConfigNumberBase):
         """Zainicjalizuj encję verify_settling."""
         super().__init__(hass, entry, coordinator_data, "verify_settling")
         self._attr_name = "Opóźnienie przed verify"
+
+
+class SolarAcceleratorVerifyRetriesNumber(_ConfigNumberBase):
+    """Liczba dodatkowych prób execute+verify gdy pierwszy verify się nie powiódł."""
+
+    # Liczba prób — bez jednostki "s"
+    _attr_native_unit_of_measurement = None
+    _attr_icon = "mdi:reload"
+    _attr_translation_key = "verify_retries"
+    _attr_native_min_value = MIN_VERIFY_RETRIES
+    _attr_native_max_value = MAX_VERIFY_RETRIES
+    _attr_native_step = 1
+
+    _data_key = "verify_retries"
+    _default_value = DEFAULT_VERIFY_RETRIES
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
+    ) -> None:
+        """Zainicjalizuj encję verify_retries."""
+        super().__init__(hass, entry, coordinator_data, "verify_retries")
+        self._attr_name = "Liczba prób verify"

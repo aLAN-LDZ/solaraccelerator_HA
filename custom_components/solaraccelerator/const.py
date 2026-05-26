@@ -75,7 +75,14 @@ MAX_COMMAND_DELAY = 10.0
 
 DEFAULT_VERIFY_SETTLING = 5.0    # sekund od ostatniego write do pierwszego verify
 MIN_VERIFY_SETTLING = 1.0
-MAX_VERIFY_SETTLING = 60.0
+MAX_VERIFY_SETTLING = 120.0
+
+# Verify retry — gdy verify pokaże że falownik nie przyjął write (np. Modbus
+# odrzucił pakiet), ponawiamy execute+verify do MAX prób. Tylko dla komend
+# które wykonały się bez wyjątku — encja unavailable nie jest retry'owana.
+DEFAULT_VERIFY_RETRIES = 3       # liczba dodatkowych prób po pierwszym fail
+MIN_VERIFY_RETRIES = 0           # 0 = brak retry, klasyczne zachowanie
+MAX_VERIFY_RETRIES = 10
 
 # Lista wszystkich pól które integracja może wysyłać do backendu.
 # Format: (key, description, unit, category)

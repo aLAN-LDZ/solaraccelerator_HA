@@ -261,6 +261,9 @@
       },
       "verify_settling": {
         "name": "Settling delay before verify"
+      },
+      "verify_retries": {
+        "name": "Verify retries"
       }
     }
   }

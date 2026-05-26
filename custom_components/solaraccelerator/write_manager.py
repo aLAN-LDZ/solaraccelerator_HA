@@ -49,6 +49,7 @@ from homeassistant.core import HomeAssistant
 from .api import async_ack_command
 from .const import (
     DEFAULT_COMMAND_DELAY,
+    DEFAULT_VERIFY_RETRIES,
     DEFAULT_VERIFY_SETTLING,
 )
 
@@ -119,13 +120,28 @@ class WriteManager:
                 await asyncio.sleep(1)
 
     async def _process_batch(self, batch: list[dict[str, Any]]) -> None:
-        """Wykonaj jedną batch komend zgodnie z planem: execute → settle → verify → ACK."""
+        """Wykonaj jedną batch komend: execute → settle → verify → (retry × N) → ACK.
+
+        Retry verify
+        ------------
+        Po pierwszym verify zbieramy komendy które wykonały się bez wyjątku ale
+        nie przeszły verify (np. Modbus odrzucił write — falownik nie zmienił
+        wartości w rejestrze). Robimy dla nich do ``verify_retries`` dodatkowych
+        rund: execute_failed → settle → verify. Każda runda redukuje listę
+        do-retry o te które już przeszły. Po wyczerpaniu prób ACK z ostatnim
+        verify_error.
+
+        Komendy które rzuciły wyjątkiem w ``_execute_one`` (encja unavailable,
+        timeout HA itp.) NIE są retry'owane — to znak że problem jest "wyżej"
+        niż pojedynczy write i ponowienie nic nie da.
+        """
         command_delay = self._get_command_delay()
         verify_settling = self._get_verify_settling()
+        verify_retries = self._get_verify_retries()
 
         _LOGGER.info(
-            "Przetwarzam batch %d komend (delay=%.2fs, settling=%.2fs)",
-            len(batch), command_delay, verify_settling,
+            "Przetwarzam batch %d komend (delay=%.2fs, settling=%.2fs, retries=%d)",
+            len(batch), command_delay, verify_settling, verify_retries,
         )
 
         # Krok 1: wykonaj wszystkie komendy z pauzą między nimi
@@ -142,21 +158,57 @@ class WriteManager:
         _LOGGER.debug("Czekam %.2fs przed verify", verify_settling)
         await asyncio.sleep(verify_settling)
 
-        # Krok 3: verify każdej komendy (tylko tych które się wykonały bez błędu)
-        # i wyślij ACK z finalnym statusem
+        # Krok 3: pierwsza runda verify
+        # Trzymamy stan per-komenda: (verify_ok, error_message)
+        # Komendy z exec_error mają od razu verify_ok=False i nie są retry'owane.
+        verify_results: list[tuple[bool, str | None]] = []
         for cmd, (executed_ok, exec_error) in zip(batch, execute_results):
-            cmd_id = cmd["id"]
-
             if not executed_ok:
-                # Komenda nie wykonała się — od razu ACK z błędem, bez verify
-                await async_ack_command(
-                    self.hass, self.coordinator_data, cmd_id, False, exec_error,
-                )
-                continue
+                verify_results.append((False, exec_error))
+            else:
+                verify_results.append(self._verify_one(cmd))
 
-            verify_ok, verify_error = self._verify_one(cmd)
+        # Krok 4: retry verify dla komend które wykonały się ale verify failed
+        for attempt in range(1, verify_retries + 1):
+            to_retry_idx = [
+                i for i in range(len(batch))
+                if execute_results[i][0] and not verify_results[i][0]
+            ]
+            if not to_retry_idx:
+                break
+
+            _LOGGER.warning(
+                "Verify retry %d/%d dla %d komend: %s",
+                attempt, verify_retries, len(to_retry_idx),
+                [batch[i].get("entity_id") for i in to_retry_idx],
+            )
+
+            # ponów execute dla każdej z command_delay między
+            for j, idx in enumerate(to_retry_idx):
+                success, error = await self._execute_one(batch[idx])
+                if not success:
+                    # exec wywalił się w retry — zapisujemy fail i wyłączamy z dalszego verify
+                    execute_results[idx] = (False, error)
+                    verify_results[idx] = (False, error)
+                if j < len(to_retry_idx) - 1:
+                    await asyncio.sleep(command_delay)
+
+            # settle i ponowny verify tylko dla tych których exec się powiódł
+            await asyncio.sleep(verify_settling)
+            for idx in to_retry_idx:
+                if execute_results[idx][0]:
+                    verify_results[idx] = self._verify_one(batch[idx])
+                    if verify_results[idx][0]:
+                        _LOGGER.info(
+                            "Verify OK na próbie %d/%d dla %s",
+                            attempt + 1, verify_retries + 1,
+                            batch[idx].get("entity_id"),
+                        )
+
+        # Krok 5: ACK z finalnym statusem
+        for cmd, (verify_ok, verify_error) in zip(batch, verify_results):
             await async_ack_command(
-                self.hass, self.coordinator_data, cmd_id, verify_ok, verify_error,
+                self.hass, self.coordinator_data, cmd["id"], verify_ok, verify_error,
             )
 
     # === Pojedyncze operacje ===
@@ -254,3 +306,7 @@ class WriteManager:
     def _get_verify_settling(self) -> float:
         """Pobierz aktualną wartość verify_settling z encji number (lub default)."""
         return float(self.coordinator_data.get("verify_settling", DEFAULT_VERIFY_SETTLING))
+
+    def _get_verify_retries(self) -> int:
+        """Pobierz aktualną liczbę dodatkowych prób verify (0 = brak retry)."""
+        return int(self.coordinator_data.get("verify_retries", DEFAULT_VERIFY_RETRIES))
