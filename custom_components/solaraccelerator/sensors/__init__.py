@@ -14,6 +14,7 @@ from .diagnostic import (
     SolarAcceleratorLastSentSensor,
     SolarAcceleratorNextScheduledSensor,
     SolarAcceleratorStatusSensor,
+    SolarAcceleratorWriteStatsSensor,
 )
 from .live import (
     SolarAcceleratorLiveIntervalSensor,
@@ -45,6 +46,7 @@ __all__ = [
     "SolarAcceleratorLastSentSensor",
     "SolarAcceleratorNextScheduledSensor",
     "SolarAcceleratorEntitiesCountSensor",
+    "SolarAcceleratorWriteStatsSensor",
     # ceny
     "SolarAcceleratorCurrentBuyPriceSensor",
     "SolarAcceleratorMinBuyPriceSensor",

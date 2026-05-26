@@ -95,6 +95,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # przy starcie (z RestoreEntity) i przy każdej zmianie z UI.
         "command_delay": DEFAULT_COMMAND_DELAY,
         "verify_settling": DEFAULT_VERIFY_SETTLING,
+        # Diagnostyka write_managera — kumulatywne statystyki per entity_id (retry, ok/fail)
+        # i meta ostatniego batcha. Aktualizowane w WriteManager._process_batch.
+        "write_stats": {
+            "entities": {},      # entity_id → {total_commands, total_retries, last_retries, last_status, last_error, last_value, last_attempt_at}
+            "last_batch_at": None,
+            "last_batch_size": 0,
+            "last_batch_acked": 0,
+            "last_batch_failed": 0,
+            "last_batch_retried": 0,  # liczba komend które wymagały >=1 retry
+        },
     }
 
     # WriteManager — kolejka komend do falownika z worker'em w tle.
@@ -109,16 +119,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Wyładuj integrację — anuluj taski w tle, zatrzymaj write_manager i odepnij platformy."""
+    """Wyładuj integrację — zatrzymaj write_manager i odepnij platformy.
+
+    Pętle godzinowa/live są tworzone przez ``entry.async_create_background_task`` —
+    HA anuluje je automatycznie przy unload. WriteManager tworzy własny task przez
+    ``hass.async_create_background_task`` więc go zatrzymujemy ręcznie.
+    """
     coordinator_data = hass.data[DOMAIN].get(entry.entry_id, {})
 
-    # Anuluj obie pętle w tle — inaczej zostałyby "wiszące" po reloadzie
-    if task := coordinator_data.get("_task"):
-        task.cancel()
-    if live_task := coordinator_data.get("_live_task"):
-        live_task.cancel()
-
-    # Zatrzymaj worker'a write_managera
+    # Zatrzymaj worker'a write_managera (osobny task niezwiązany z entry)
     if write_manager := coordinator_data.get("write_manager"):
         write_manager.stop()
 

@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -80,10 +81,16 @@ class WriteManager:
     # === API publiczne ===
 
     def start(self) -> None:
-        """Uruchom worker'a w tle. Bezpieczne do wielokrotnego wywołania."""
+        """Uruchom worker'a w tle. Bezpieczne do wielokrotnego wywołania.
+
+        ``async_create_background_task`` zamiast ``async_create_task`` — worker to
+        nieskończona pętla, której HA nigdy nie powinien oczekiwać podczas bootstrap.
+        """
         if self._worker_task and not self._worker_task.done():
             return
-        self._worker_task = self.hass.async_create_task(self._worker())
+        self._worker_task = self.hass.async_create_background_task(
+            self._worker(), "sa_write_manager_worker"
+        )
 
     def stop(self) -> None:
         """Zatrzymaj worker'a (np. przy unload integracji)."""
@@ -144,6 +151,10 @@ class WriteManager:
             len(batch), command_delay, verify_settling, verify_retries,
         )
 
+        # Licznik prób per indeks komendy w batchu — 0 = tylko pierwsza próba przeszła
+        # (bez retry), 1 = jeden retry, ... Używany do diagnostyki (sensor write_stats).
+        retry_counts: list[int] = [0] * len(batch)
+
         # Krok 1: wykonaj wszystkie komendy z pauzą między nimi
         execute_results: list[tuple[bool, str | None]] = []
         for i, cmd in enumerate(batch):
@@ -183,6 +194,10 @@ class WriteManager:
                 [batch[i].get("entity_id") for i in to_retry_idx],
             )
 
+            # Każda komenda którą próbujemy w tej rundzie dostaje +1 do licznika
+            for idx in to_retry_idx:
+                retry_counts[idx] = attempt
+
             # ponów execute dla każdej z command_delay między
             for j, idx in enumerate(to_retry_idx):
                 success, error = await self._execute_one(batch[idx])
@@ -205,7 +220,9 @@ class WriteManager:
                             batch[idx].get("entity_id"),
                         )
 
-        # Krok 5: ACK z finalnym statusem
+        # Krok 5: zaktualizuj statystyki diagnostyczne i wyślij ACK
+        self._update_write_stats(batch, verify_results, retry_counts)
+
         for cmd, (verify_ok, verify_error) in zip(batch, verify_results):
             await async_ack_command(
                 self.hass, self.coordinator_data, cmd["id"], verify_ok, verify_error,
@@ -310,3 +327,76 @@ class WriteManager:
     def _get_verify_retries(self) -> int:
         """Pobierz aktualną liczbę dodatkowych prób verify (0 = brak retry)."""
         return int(self.coordinator_data.get("verify_retries", DEFAULT_VERIFY_RETRIES))
+
+    # === Diagnostyka (zasilanie sensora write_stats) ===
+
+    def _update_write_stats(
+        self,
+        batch: list[dict[str, Any]],
+        verify_results: list[tuple[bool, str | None]],
+        retry_counts: list[int],
+    ) -> None:
+        """Zaktualizuj kumulatywne statystyki per-entity i meta ostatniego batcha.
+
+        Wynik trafia do ``coordinator_data['write_stats']``, skąd czyta go
+        ``SolarAcceleratorWriteStatsSensor``. Per-entity statystyki są kumulatywne
+        (od startu integracji), meta odnosi się tylko do ostatnio przetworzonego batcha.
+        """
+        stats = self.coordinator_data.get("write_stats")
+        if not stats:
+            return
+
+        now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        entities_map: dict[str, dict[str, Any]] = stats.setdefault("entities", {})
+
+        batch_acked = 0
+        batch_failed = 0
+        batch_retried = 0
+
+        for cmd, (verify_ok, verify_error), retries in zip(batch, verify_results, retry_counts):
+            entity_id = cmd.get("entity_id") or "unknown"
+            service_data = cmd.get("service_data") or {}
+            # Wyciągnij wartość żądaną — różny klucz zależnie od service
+            requested_value = (
+                service_data.get("value")
+                or service_data.get("option")
+                or service_data.get("time")
+            )
+
+            entry_stats = entities_map.setdefault(entity_id, {
+                "total_commands": 0,
+                "total_retries": 0,
+                "last_retries": 0,
+                "last_status": None,
+                "last_error": None,
+                "last_value": None,
+                "last_attempt_at": None,
+            })
+
+            entry_stats["total_commands"] += 1
+            entry_stats["total_retries"] += retries
+            entry_stats["last_retries"] = retries
+            entry_stats["last_status"] = "ok" if verify_ok else "failed"
+            entry_stats["last_error"] = None if verify_ok else verify_error
+            entry_stats["last_value"] = requested_value
+            entry_stats["last_attempt_at"] = now_iso
+
+            if verify_ok:
+                batch_acked += 1
+            else:
+                batch_failed += 1
+            if retries > 0:
+                batch_retried += 1
+
+        stats["last_batch_at"] = now_iso
+        stats["last_batch_size"] = len(batch)
+        stats["last_batch_acked"] = batch_acked
+        stats["last_batch_failed"] = batch_failed
+        stats["last_batch_retried"] = batch_retried
+
+        # Push stanu do sensora — jeśli jest podpięty, odświeży się natychmiast
+        if (notifier := self.coordinator_data.get("write_stats_notify")):
+            try:
+                notifier()
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.debug("write_stats notifier rzucił wyjątek: %s", e)

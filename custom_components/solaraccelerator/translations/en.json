@@ -190,6 +190,9 @@
       "entities_sent": {
         "name": "Entities Sent"
       },
+      "write_stats": {
+        "name": "Command diagnostics"
+      },
       "current_buy_price": {
         "name": "Buy Energy Price"
       },
