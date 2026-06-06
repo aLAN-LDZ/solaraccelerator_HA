@@ -42,6 +42,7 @@ from .sensors import (
     SolarAcceleratorNextScheduledSensor,
     SolarAcceleratorPriceProviderSensor,
     SolarAcceleratorStatusSensor,
+    SolarAcceleratorWriteStatsSensor,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -84,21 +85,30 @@ async def async_setup_entry(
         SolarAcceleratorLiveStatusSensor(hass, entry, coordinator_data),
         SolarAcceleratorLiveLastPushSensor(hass, entry, coordinator_data),
         SolarAcceleratorLiveIntervalSensor(hass, entry, coordinator_data),
+        # Diagnostyka write_managera — retry/status per sterowana encja
+        SolarAcceleratorWriteStatsSensor(hass, entry, coordinator_data),
     ])
 
     # Pobierz ceny i zysk od razu na starcie — żeby sensory nie świeciły "unknown"
-    # przed pierwszą pełną godziną
-    hass.async_create_task(async_fetch_prices(hass, coordinator_data))
-    hass.async_create_task(async_fetch_profit(hass, coordinator_data))
-
-    # Pętla godzinowa — pełna paczka danych co pełną godzinę
-    task = hass.async_create_task(
-        async_send_data_hourly(hass, entry, coordinator_data)
+    # przed pierwszą pełną godziną. Background — żeby wolny serwer nie blokował bootstrap.
+    entry.async_create_background_task(
+        hass, async_fetch_prices(hass, coordinator_data), "sa_fetch_prices_init"
     )
-    coordinator_data["_task"] = task
+    entry.async_create_background_task(
+        hass, async_fetch_profit(hass, coordinator_data), "sa_fetch_profit_init"
+    )
+
+    # Pętla godzinowa — pełna paczka danych co pełną godzinę.
+    # background_task = HA nie czeka na nią podczas bootstrap (to nieskończony while True).
+    entry.async_create_background_task(
+        hass,
+        async_send_data_hourly(hass, entry, coordinator_data),
+        "sa_send_data_hourly",
+    )
 
     # Pętla live — szybki push stanu i odbiór komend co kilkanaście sekund
-    live_task = hass.async_create_task(
-        async_send_live_data_loop(hass, entry, coordinator_data)
+    entry.async_create_background_task(
+        hass,
+        async_send_live_data_loop(hass, entry, coordinator_data),
+        "sa_send_live_data_loop",
     )
-    coordinator_data["_live_task"] = live_task

@@ -190,6 +190,9 @@
       "entities_sent": {
         "name": "Wysłane encje"
       },
+      "write_stats": {
+        "name": "Diagnostyka komend"
+      },
       "current_buy_price": {
         "name": "Cena zakupu energii"
       },
@@ -261,6 +264,9 @@
       },
       "verify_settling": {
         "name": "Opóźnienie przed verify"
+      },
+      "verify_retries": {
+        "name": "Liczba prób verify"
       }
     }
   }

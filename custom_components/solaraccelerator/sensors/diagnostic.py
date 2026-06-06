@@ -27,6 +27,16 @@ from ..const import (
 )
 from ._base import SolarAcceleratorSensorBase
 
+# Pusta diagnostyka — gdy write_manager jeszcze nie miał żadnego batcha
+_EMPTY_WRITE_STATS: dict[str, Any] = {
+    "entities": {},
+    "last_batch_at": None,
+    "last_batch_size": 0,
+    "last_batch_acked": 0,
+    "last_batch_failed": 0,
+    "last_batch_retried": 0,
+}
+
 
 class SolarAcceleratorStatusSensor(SolarAcceleratorSensorBase):
     """Status połączenia z backendem (``connected``/``auth_error``/``error``/``disconnected``)."""
@@ -187,3 +197,59 @@ class SolarAcceleratorEntitiesCountSensor(SolarAcceleratorSensorBase):
             attrs["ev_enabled"] = False
 
         return attrs
+
+
+class SolarAcceleratorWriteStatsSensor(SolarAcceleratorSensorBase):
+    """Diagnostyka write_managera — retry i finalny status per sterowana encja.
+
+    Main state = liczba komend z ostatniego batcha które wymagały retry (0 = OK).
+    Atrybuty zawierają meta ostatniego batcha + kumulatywne statystyki per entity_id
+    od startu integracji: ile razy komenda dla danej encji się powiodła, ile razy
+    musieliśmy retry'ować, jaka była ostatnia żądana wartość i finalny status.
+
+    Sensor odświeża się natychmiast po każdym batchu — WriteManager woła
+    ``coordinator_data['write_stats_notify']`` zaraz po ACK'owaniu komend.
+    """
+
+    _attr_icon = "mdi:reload-alert"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_translation_key = "write_stats"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator_data: dict[str, Any]
+    ) -> None:
+        """Zainicjalizuj sensor diagnostyki write_managera."""
+        super().__init__(hass, entry, coordinator_data, "write_stats")
+        self._attr_name = "Diagnostyka komend"
+
+    async def async_added_to_hass(self) -> None:
+        """Po dodaniu do HA zarejestruj notifier — write_manager woła go po każdym batchu."""
+        await super().async_added_to_hass()
+        # Schedule_update_ha_state można wołać synchronicznie z dowolnego kontekstu
+        self.coordinator_data["write_stats_notify"] = self.async_schedule_update_ha_state
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Wyczyść notifier — uniknij wołania callbacka po unmount."""
+        if self.coordinator_data.get("write_stats_notify") == self.async_schedule_update_ha_state:
+            self.coordinator_data.pop("write_stats_notify", None)
+        await super().async_will_remove_from_hass()
+
+    @property
+    def native_value(self) -> int:
+        """Liczba komend z ostatniego batcha które wymagały co najmniej 1 retry."""
+        stats = self.coordinator_data.get("write_stats") or _EMPTY_WRITE_STATS
+        return int(stats.get("last_batch_retried", 0))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Pełna diagnostyka batcha + kumulatywne statystyki per entity."""
+        stats = self.coordinator_data.get("write_stats") or _EMPTY_WRITE_STATS
+        return {
+            "last_batch_at": stats.get("last_batch_at"),
+            "last_batch_size": stats.get("last_batch_size", 0),
+            "last_batch_acked": stats.get("last_batch_acked", 0),
+            "last_batch_failed": stats.get("last_batch_failed", 0),
+            "last_batch_retried": stats.get("last_batch_retried", 0),
+            "entities": stats.get("entities", {}),
+        }
