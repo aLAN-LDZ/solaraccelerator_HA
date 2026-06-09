@@ -38,7 +38,7 @@ from .write_manager import WriteManager
 LOGGER = logging.getLogger(__name__)
 
 # Platformy HA które ładuje ta integracja (każda ma swój plik async_setup_entry)
-PLATFORMS = ["sensor", "button", "number", "switch"]
+PLATFORMS = ["sensor", "binary_sensor", "button", "number", "switch"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -69,6 +69,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "live_status": "inactive",
         "live_last_push": None,
         "live_interval_seconds": DEFAULT_LIVE_INTERVAL,
+        # Status komunikacji falownik↔HA — aktualizowany przez health.update_inverter_health
+        # w pętli live (vitale + debounce). Domyślnie online, dopóki nie wykryjemy utraty.
+        "inverter_online": True,
+        "inverter_health_notify": None,
         # Bufor cen energii — uzupełnia async_fetch_prices, czytają sensory cen
         "prices": {
             "current_price": None,

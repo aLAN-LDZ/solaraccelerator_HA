@@ -1,8 +1,12 @@
 # SolarAccelerator Home Assistant Integration
 
-Oficjalna integracja Home Assistant dla SolarAccelerator w trybie Push API.
+Oficjalna integracja Home Assistant dla SolarAccelerator działająca w trybie Push API.
 
-Integracja pozwala wysyłać dane z inwertera (przez Home Assistant) do serwisu SolarAccelerator bez konieczności otwierania portów lub korzystania z Nabu Casa.
+Integracja:
+- **wysyła** dane z falownika (i opcjonalnie ładowarki EV) do serwisu SolarAccelerator — bez otwierania portów ani Nabu Casa,
+- utrzymuje **kanał live** (szybki push stanu co kilkanaście sekund),
+- **odbiera komendy** z serwisu i zapisuje ustawienia falownika (np. tryb pracy, limity prądu, harmonogram), z weryfikacją i ponawianiem,
+- **pilnuje ustawień** — przywraca wartości z planu, gdy falownik sam wróci do poprzednich.
 
 ## Instalacja
 
@@ -25,29 +29,31 @@ Integracja pozwala wysyłać dane z inwertera (przez Home Assistant) do serwisu 
 1. Zaloguj się do panelu SolarAccelerator
 2. Przejdź do **Integracje → Inwertery**
 3. W sekcji **Home Assistant** kliknij **Wygeneruj klucz API**
-4. **Skopiuj i zapisz klucz** - nie będzie można go ponownie wyświetlić!
+4. **Skopiuj i zapisz klucz** — nie będzie można go ponownie wyświetlić!
 
-Klucz ma format: `sa_haapi_` + 32 znaki
+Klucz ma format: `sa_haapi_` + 32 znaki.
 
-### 2. Skonfiguruj integrację w Home Assistant
+### 2. Dodaj integrację w Home Assistant
 
 1. Przejdź do **Ustawienia → Urządzenia i usługi → Dodaj integrację**
 2. Wyszukaj "SolarAccelerator"
-3. Wprowadź:
-   - **Klucz API**: Twój klucz wygenerowany w panelu SolarAccelerator
-   - **Adres serwera**: `https://solaraccelerator.cloud` (domyślnie)
+3. Podaj **Klucz API** oraz **Adres serwera** (domyślnie `https://solaraccelerator.cloud`)
 
-4. Po weryfikacji klucza API przejdziesz przez 6 kroków mapowania encji:
-   - **PV**: 8 encji (moc, napięcie, prąd stringów PV, dzienna produkcja)
-   - **Bateria**: 8 encji (moc, napięcie, prąd, SOC, SOH, temperatura)
-   - **Inwerter**: 8 encji (status, napięcie/prąd L1-L3, moc)
-   - **Sieć**: 7 encji (moc, CT L1-L3, import/eksport dzienny)
-   - **Obciążenie**: 5 encji (zużycie dzienne, moc L1-L3, częstotliwość)
-   - **Temperatury**: 2 encje (radiator, transformator DC)
+Po weryfikacji klucza kreator przeprowadzi przez kolejne kroki:
 
-5. Gotowe! Integracja zacznie wysyłać dane automatycznie o każdej pełnej godzinie.
+**Falownik**
+1. **Model i tryb konfiguracji** — wybierasz model falownika (np. *Deye — SG0\*LP3*) oraz sposób mapowania encji:
+   - **Prefix (zalecane)** — integracja sama zbuduje mapowanie wg konwencji nazw integracji *Solarman* (HACS). Podajesz tylko prefix encji (np. `deye` dla `sensor.deye_pv1_power`).
+   - **Ręczny** — wybierasz każdą encję z Home Assistant samodzielnie (kroki: PV → Bateria → Inwerter → Sieć → Obciążenie → Temperatury).
 
-## Obsługiwane encje (36 sensorów)
+**Ładowarka EV (opcjonalnie)**
+2. **Czy masz ładowarkę EV przez OCPP?** — jeśli tak, analogicznie wybierasz model (np. *Autel — MaxiChargerAC 7.5KW*) i tryb (prefix integracji *OCPP* albo ręczne mapowanie).
+
+Gotowe — integracja zacznie wysyłać dane automatycznie o każdej pełnej godzinie oraz utrzymywać kanał live.
+
+## Dane wysyłane z falownika
+
+Te encje pobierasz/mapujesz w Home Assistant; integracja odczytuje ich stan i wysyła do serwisu.
 
 ### PV (Panele fotowoltaiczne)
 | Encja | Opis | Jednostka |
@@ -66,7 +72,7 @@ Klucz ma format: `sa_haapi_` + 32 znaki
 |-------|------|-----------|
 | `day_battery_discharge` | Dzienne rozładowanie baterii | kWh |
 | `day_battery_charge` | Dzienne ładowanie baterii | kWh |
-| `battery_power` | Moc baterii (+ ładowanie, - rozładowanie) | W |
+| `battery_power` | Moc baterii (+ ładowanie, − rozładowanie) | W |
 | `battery_current` | Prąd baterii | A |
 | `battery_temp` | Temperatura baterii | °C |
 | `battery_voltage` | Napięcie baterii | V |
@@ -88,7 +94,7 @@ Klucz ma format: `sa_haapi_` + 32 znaki
 ### Sieć
 | Encja | Opis | Jednostka |
 |-------|------|-----------|
-| `grid_power` | Moc sieci (+ pobór, - oddawanie) | W |
+| `grid_power` | Moc sieci (+ pobór, − oddawanie) | W |
 | `grid_ct_power_l1` | Moc CT L1 | W |
 | `grid_ct_power_l2` | Moc CT L2 | W |
 | `grid_ct_power_l3` | Moc CT L3 | W |
@@ -111,71 +117,116 @@ Klucz ma format: `sa_haapi_` + 32 znaki
 | `radiator_temp` | Temperatura radiatora | °C |
 | `dc_transformer_temp` | Temperatura transformatora DC | °C |
 
-## Encje diagnostyczne
+### Ładowarka EV (OCPP) — opcjonalnie
+Wysyłane tylko gdy włączysz ładowarkę EV i podasz prefix.
 
-Integracja tworzy urządzenie "SolarAccelerator" z następującymi sensorami:
+| Encja | Opis | Jednostka |
+|-------|------|-----------|
+| `status` | Status ładowarki | - |
+| `status_connector` | Status połączenia | - |
+| `vendor` | Producent ładowarki | - |
+| `power_active_import` | Moc ładowania | kW |
+| `energy_session` | Energia sesji | kWh |
+| `energy_active_import_register` | Licznik energii | kWh |
+| `current_import` | Prąd ładowania | A |
+| `voltage` | Napięcie | V |
+| `time_session` | Czas sesji | min |
+| `error_code` | Kod błędu | - |
+| `transaction_id` | ID transakcji | - |
 
-- **Status połączenia**: Aktualny stan połączenia z serwerem
-  - `connected` - połączono pomyślnie
-  - `disconnected` - brak połączenia
-  - `auth_error` - błąd autoryzacji (nieprawidłowy klucz API)
-  - `error` - inny błąd
+## Sterowanie falownikiem
 
-- **Ostatnie wysłanie**: Timestamp ostatniego pomyślnego wysłania danych
+Integracja może odbierać komendy z serwisu SolarAccelerator i zapisywać ustawienia falownika (np. tryb pracy, limity prądu ładowania/rozładowania, harmonogram). Komendy są wykonywane przez wewnętrzny **WriteManager**, który:
 
-- **Wysłane encje**: Liczba encji wysłanych w ostatnim żądaniu
+1. wykonuje komendy **sekwencyjnie**, z konfigurowalnym odstępem między nimi,
+2. po zapisie czeka aż falownik się **ustabilizuje**, po czym **weryfikuje**, że wartość faktycznie się zmieniła,
+3. **ponawia** zapis, jeśli weryfikacja się nie powiodła (np. Modbus odrzucił pakiet).
+
+Powód: falownik (Modbus przez Solarman) nie nadąża, gdy uderza w niego kilka zapisów naraz — część komend bywa po cichu odrzucana. Kolejka z opóźnieniami i weryfikacją sprawia, że zapisy są niezawodne.
+
+### Encje konfiguracyjne (kategoria: Konfiguracja)
+
+Pozwalają stroić zachowanie WriteManagera z poziomu UI, bez restartu integracji:
+
+| Encja | Opis | Domyślnie |
+|-------|------|-----------|
+| **Opóźnienie między komendami** | Sekund między kolejnymi zapisami w jednej paczce | 1.5 s |
+| **Opóźnienie przed verify** | Sekund od ostatniego zapisu do odczytu weryfikacyjnego | 5.0 s |
+| **Liczba prób verify** | Ile razy ponowić zapis, gdy weryfikacja zawiedzie | 3 |
+
+## Pilnuj ustawień
+
+Przełącznik **„Pilnuj ustawień"** (domyślnie **włączony**) rozwiązuje znany problem falowników Deye/Solarman: po udanym zapisie rejestr potrafi po kilku–kilkunastu minutach **sam wrócić** do poprzedniej wartości — przez co plan przestaje być realizowany, mimo że komenda raz się wykonała.
+
+Gdy funkcja jest włączona, integracja po każdej komendzie zapamiętuje docelowy stan sterowanych encji i pilnuje go przez całą godzinę:
+
+- **reaguje natychmiast** na zmianę stanu encji,
+- dodatkowo **co 60 s sprawdza** wszystkie pilnowane encje — łapie też przypadki, gdy falownik utknął na złej wartości bez zgłoszenia zmiany lub gdy poprzednia korekta nie zadziałała,
+- przy wykryciu odchylenia **przywraca** wartość z planu.
+
+Pilnowanie trwa do końca bieżącej godziny (lub do nadejścia nowego planu). Wyłączenie przełącznika zatrzymuje przywracanie — integracja dalej wysyła i odbiera dane, ale nie ingeruje w ręczne zmiany ustawień falownika.
+
+## Encje tworzone przez integrację
+
+Integracja tworzy urządzenie **„Solar Accelerator"** z następującymi encjami.
+
+### Diagnostyka
+- **Status połączenia** — `connected` / `disconnected` / `auth_error` / `error`
+- **Ostatnie wysłanie** — czas ostatniej udanej wysyłki paczki godzinowej
+- **Następne wysłanie** — zaplanowany czas kolejnej wysyłki
+- **Wysłane encje** — liczba encji z odczytanym stanem w ostatniej paczce
+- **Diagnostyka komend** — statystyki zapisów do falownika (status, liczba ponowień per encja)
+
+### Kanał live
+- **Status LIVE** — `live` / `inactive` / `disabled` / `rate_limited` / `auth_error` / `error`
+- **Ostatni push LIVE** — czas ostatniego pushu live
+- **Interwał LIVE** — aktualny odstęp między pushami live
+
+### Ceny energii
+- **Cena zakupu energii** oraz **min / max / średnia** na dziś
+- **Cena sprzedaży energii** oraz **min / max / średnia** na dziś
+- **Tania energia** / **Droga energia** — flagi bieżącej godziny
+- **Dostawca cen**
+
+### Zysk
+- **Dzienny zysk**
+- **Wartość baterii**
+- **Średnia cena baterii**
+
+### Sterowanie
+- **Synchronizuj** (przycisk) — wymusza natychmiastową wysyłkę danych poza harmonogramem (przydatne po zmianie mapowania)
+- **Opóźnienie między komendami**, **Opóźnienie przed verify**, **Liczba prób verify** (number) — patrz *Sterowanie falownikiem*
+- **Pilnuj ustawień** (przełącznik) — patrz *Pilnuj ustawień*
 
 ## Jak to działa
 
-1. Integracja waliduje klucz API poprzez testowe żądanie do API
-2. Po skonfigurowaniu mapowania encji, integracja cyklicznie:
-   - Pobiera aktualny stan wszystkich zmapowanych encji z HA
-   - Konwertuje wartości do odpowiednich typów (float, int, bool)
-   - Wysyła dane do API SolarAccelerator w formacie JSON
-3. Status połączenia jest aktualizowany na podstawie odpowiedzi serwera
-
-## Format API
-
-### Test połączenia
-```
-GET https://solaraccelerator.cloud/api/homeassistant/test-connection
-Authorization: Bearer sa_haapi_...
-```
-
-### Wysyłanie danych
-```
-POST https://solaraccelerator.cloud/api/homeassistant/send-data
-Authorization: Bearer sa_haapi_...
-Content-Type: application/json
-
-{
-  "timestamp": "2024-01-18T12:00:00.000Z",
-  "entities": {
-    "pv1_power": 1500,
-    "pv2_power": 1200,
-    "battery_soc": 85,
-    "battery_power": 500,
-    "grid_power": -200,
-    ...
-  }
-}
-```
+1. Integracja waliduje klucz API przy konfiguracji.
+2. Co pełną godzinę wysyła pełną paczkę zmapowanych encji oraz pobiera aktualne ceny i (po przetworzeniu) dzienny zysk.
+3. Między godzinami utrzymuje kanał live — szybki push stanu; jego interwał jest sterowany zdalnie.
+4. W odpowiedzi na kanale live może otrzymać komendy do falownika — wykonuje je przez WriteManager (zapis → stabilizacja → weryfikacja → ewentualne ponowienie).
+5. Jeśli „Pilnuj ustawień" jest włączone, przez całą godzinę pilnuje, by zapisane wartości się utrzymały.
 
 ## Rozwiązywanie problemów
 
-### Błąd "Nieprawidłowy klucz API"
+### Błąd „Nieprawidłowy klucz API"
 - Upewnij się, że klucz zaczyna się od `sa_haapi_`
-- Sprawdź czy klucz został skopiowany w całości (min. 40 znaków)
-- Wygeneruj nowy klucz w panelu SolarAccelerator
+- Sprawdź, czy klucz został skopiowany w całości (min. 40 znaków)
+- W razie potrzeby wygeneruj nowy klucz w panelu SolarAccelerator
 
-### Błąd "Nie można połączyć się z serwerem"
+### Błąd „Nie można połączyć się z serwerem"
 - Sprawdź połączenie internetowe Home Assistant
-- Zweryfikuj czy adres serwera jest poprawny
-- Sprawdź czy serwer SolarAccelerator jest dostępny
+- Zweryfikuj poprawność adresu serwera
 
-### Status "disconnected"
-- Sprawdź logi Home Assistant w **Ustawienia → System → Logi**
-- Poszukaj wpisów z `solaraccelerator`
+### Status „disconnected" / „error"
+- Sprawdź logi w **Ustawienia → System → Logi** i poszukaj wpisów z `solaraccelerator`
+
+### Status LIVE „disabled"
+- Kanał live został wyłączony po stronie serwisu — integracja sprawdzi ponownie automatycznie
+
+### Komendy do falownika nie „trzymają się"
+- Włącz przełącznik **Pilnuj ustawień**
+- Sprawdź encję **Diagnostyka komend** — pokazuje status i liczbę ponowień per encja
+- Jeśli zapisy są odrzucane, zwiększ **Opóźnienie między komendami** / **Opóźnienie przed verify** lub **Liczbę prób verify**
 
 ## Licencja
 
