@@ -52,3 +52,57 @@ def get_seconds_until_next_hour() -> float:
     now = dt_util.now()
     next_hour = get_next_full_hour()
     return (next_hour - now).total_seconds()
+
+
+def state_matches_expected(
+    service: str,
+    service_data: dict,
+    actual: str,
+) -> tuple[bool, str | None]:
+    """Czy bieżący stan encji (``actual``) odpowiada temu, co ustawialiśmy komendą.
+
+    Jedno źródło prawdy dla dwóch mechanizmów:
+    - ``write_manager`` po wysłaniu komendy weryfikuje czy falownik ją przyjął,
+    - ``guard`` ("pilnuj ustawień") sprawdza czy falownik nie odszedł od planu.
+
+    Heurystyka po nazwie ``service`` (HA trzyma stany jako stringi):
+    - ``set_value``     — liczba z tolerancją 1.0 (encja number),
+    - ``select_option`` — dokładny string,
+    - ``turn_on``/``turn_off`` — stan ``on``/``off``,
+    - inne / brak pola w ``service_data`` — akceptujemy (brak heurystyki, np.
+      ``time.set_value`` używa klucza ``time`` a nie ``value``).
+
+    Stan ``unknown``/``unavailable`` zawsze traktujemy jako niezgodny.
+
+    Zwraca ``(zgodne, powod)`` — ``powod`` jest ``None`` gdy zgodne, a w przeciwnym
+    razie krótkim opisem rozbieżności (do logów / komunikatu verify).
+    """
+    if actual in ("unknown", "unavailable"):
+        return (False, f"stan {actual}")
+
+    if service == "set_value":
+        expected = service_data.get("value")
+        if expected is None:
+            return (True, None)
+        try:
+            if abs(float(actual) - float(expected)) < 1.0:
+                return (True, None)
+            return (False, f"oczekiwano {expected}, jest {actual}")
+        except (ValueError, TypeError):
+            return (False, f"niepoliczalne expected={expected} actual={actual}")
+
+    if service == "select_option":
+        expected = service_data.get("option")
+        if expected is None:
+            return (True, None)
+        if actual == expected:
+            return (True, None)
+        return (False, f"oczekiwano '{expected}', jest '{actual}'")
+
+    if service == "turn_on":
+        return (True, None) if actual == "on" else (False, f"oczekiwano on, jest {actual}")
+    if service == "turn_off":
+        return (True, None) if actual == "off" else (False, f"oczekiwano off, jest {actual}")
+
+    # Nieznany service — nie wiemy jak porównać, akceptujemy
+    return (True, None)

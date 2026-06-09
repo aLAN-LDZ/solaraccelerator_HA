@@ -26,16 +26,19 @@ from .const import (
     CONF_SOLARMAN_PREFIX,
     CONF_EV_ENABLED,
     CONF_EV_PREFIX,
+    DATA_GUARD_ENABLED,
     DEFAULT_COMMAND_DELAY,
+    DEFAULT_GUARD_ENABLED,
     DEFAULT_LIVE_INTERVAL,
     DEFAULT_VERIFY_SETTLING,
 )
+from .guard import SettingsGuard
 from .write_manager import WriteManager
 
 LOGGER = logging.getLogger(__name__)
 
 # Platformy HA które ładuje ta integracja (każda ma swój plik async_setup_entry)
-PLATFORMS = ["sensor", "button", "number"]
+PLATFORMS = ["sensor", "button", "number", "switch"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -95,6 +98,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # przy starcie (z RestoreEntity) i przy każdej zmianie z UI.
         "command_delay": DEFAULT_COMMAND_DELAY,
         "verify_settling": DEFAULT_VERIFY_SETTLING,
+        # Przełącznik "Pilnuj ustawień" — nadpisywany przez encję switch (RestoreEntity).
+        DATA_GUARD_ENABLED: DEFAULT_GUARD_ENABLED,
         # Diagnostyka write_managera — kumulatywne statystyki per entity_id (retry, ok/fail)
         # i meta ostatniego batcha. Aktualizowane w WriteManager._process_batch.
         "write_stats": {
@@ -113,6 +118,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id]["write_manager"] = write_manager
     write_manager.start()
 
+    # SettingsGuard — "pilnuj ustawień": po komendzie zapamiętuje docelowy stan encji
+    # i przywraca go gdy falownik sam ucieknie. Sweep startuje od razu, subskrypcja
+    # zdarzeń tworzy się leniwie przy pierwszej zarejestrowanej encji.
+    settings_guard = SettingsGuard(hass, hass.data[DOMAIN][entry.entry_id])
+    hass.data[DOMAIN][entry.entry_id]["settings_guard"] = settings_guard
+    settings_guard.start()
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
@@ -130,6 +142,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Zatrzymaj worker'a write_managera (osobny task niezwiązany z entry)
     if write_manager := coordinator_data.get("write_manager"):
         write_manager.stop()
+
+    # Odepnij nasłuchy guarda (sweep + state_changed) — też niezwiązane z entry
+    if settings_guard := coordinator_data.get("settings_guard"):
+        settings_guard.stop()
 
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
