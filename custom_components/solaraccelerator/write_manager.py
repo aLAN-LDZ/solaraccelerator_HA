@@ -37,9 +37,11 @@ Porównanie stanu encji z oczekiwaną wartością robi ``state_matches_expected`
 
 Guard "pilnuj ustawień"
 -----------------------
-Po przetworzeniu batcha rejestrujemy docelowe stany encji w ``settings_guard``
+PRZED wykonaniem batcha rejestrujemy docelowe stany encji w ``settings_guard``
 (``register_many``), żeby przez całą godzinę pilnować że falownik ich nie
-zresetuje. Guard re-kolejkuje korekty z flagą ``guard`` (bez ``id`` → bez ACK);
+zresetuje. Rejestrujemy najpierw (a nie po batchu), bo własne write batcha wywołują
+``state_changed`` — gdyby guard miał wtedy w ``_desired`` jeszcze stary plan,
+cofnąłby świeżo ustawioną wartość. Guard re-kolejkuje korekty z flagą ``guard`` (bez ``id`` → bez ACK);
 po ich przetworzeniu wołamy ``on_correction_processed``, żeby guard mógł próbować
 dalej. Patrz ``guard.py``.
 
@@ -163,6 +165,16 @@ class WriteManager:
             len(batch), command_delay, verify_settling, verify_retries,
         )
 
+        # Krok 0: "pilnuj ustawień" — zarejestruj docelowe stany encji z backendu
+        # PRZED wykonaniem zapisów. Inaczej write z tego batcha wywoła ``state_changed``,
+        # a guard — mając w ``_desired`` jeszcze STARĄ wartość z poprzedniej godziny —
+        # zareagowałby natychmiast i zakolejkował korektę cofającą do starego planu.
+        # Rejestrując najpierw, guard widzi nowy cel i nie cofa świeżego ustawienia.
+        # Korekty samego guarda (flaga ``guard``) pomijamy — dotyczą encji już pilnowanych.
+        guard = self.coordinator_data.get("settings_guard")
+        if guard:
+            guard.register_many([c for c in batch if not c.get("guard")])
+
         # Licznik prób per indeks komendy w batchu — 0 = tylko pierwsza próba przeszła
         # (bez retry), 1 = jeden retry, ... Używany do diagnostyki (sensor write_stats).
         retry_counts: list[int] = [0] * len(batch)
@@ -234,13 +246,6 @@ class WriteManager:
 
         # Krok 5: zaktualizuj statystyki diagnostyczne
         self._update_write_stats(batch, verify_results, retry_counts)
-
-        # Krok 6: "pilnuj ustawień" — zarejestruj docelowe stany encji z backendu
-        # (guard będzie ich pilnował przez całą godzinę). Korekty samego guarda
-        # (flaga ``guard``) pomijamy — dotyczą encji już pilnowanych.
-        guard = self.coordinator_data.get("settings_guard")
-        if guard:
-            guard.register_many([c for c in batch if not c.get("guard")])
 
         # Krok 7: ACK do backendu — tylko komendy z ``id``. Korekty guarda nie mają
         # identyfikatora (nie pochodzą z kolejki serwera), więc ich nie potwierdzamy.
