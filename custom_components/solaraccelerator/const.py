@@ -84,6 +84,21 @@ DEFAULT_VERIFY_RETRIES = 3       # liczba dodatkowych prób po pierwszym fail
 MIN_VERIFY_RETRIES = 0           # 0 = brak retry, klasyczne zachowanie
 MAX_VERIFY_RETRIES = 10
 
+# === Guard "Pilnuj ustawień" — pilnowanie stanu sterowanych encji ===
+# Po każdej komendzie backendu guard zapamiętuje docelowy stan encji i przez całą
+# godzinę pilnuje, żeby ten stan się utrzymał. Falownik Deye/Solarman po Modbusie
+# potrafi SAM zresetować rejestr do wcześniejszej wartości po kilku–kilkunastu
+# minutach — verify dawno przeszedł, ACK wysłany, a plan przestaje być realizowany.
+# Guard wykrywa odchylenie (przez zdarzenie zmiany stanu LUB okresowy sweep) i
+# wysyła komendę przywracającą wartość z planu. Sterowany przełącznikiem switch.py.
+DATA_GUARD_ENABLED = "guard_enabled"   # klucz w coordinator_data
+DEFAULT_GUARD_ENABLED = True           # domyślnie ON — plan egzekwowany od razu po instalacji
+
+# Co ile sekund guard re-sprawdza WSZYSTKIE pilnowane encje (sweep). Łapie
+# przypadek "falownik utknął na złej wartości bez emitowania zdarzenia zmiany"
+# oraz cichą porażkę poprzedniej korekty — bo pojedynczy write nie daje pewności.
+GUARD_SWEEP_INTERVAL = 60
+
 # Lista wszystkich pól które integracja może wysyłać do backendu.
 # Format: (key, description, unit, category)
 # - ``key``         — nazwa pola w payloadzie API,

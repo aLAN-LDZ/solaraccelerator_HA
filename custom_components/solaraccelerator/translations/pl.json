@@ -253,6 +253,11 @@
         "name": "Interwał LIVE"
       }
     },
+    "binary_sensor": {
+      "inverter_comms": {
+        "name": "Komunikacja z falownikiem"
+      }
+    },
     "button": {
       "sync": {
         "name": "Synchronizuj"
@@ -267,6 +272,11 @@
       },
       "verify_retries": {
         "name": "Liczba prób verify"
+      }
+    },
+    "switch": {
+      "guard_enabled": {
+        "name": "Pilnuj ustawień"
       }
     }
   }

@@ -101,13 +101,30 @@ def _build_full_payload(
     hass: HomeAssistant,
     coordinator_data: dict[str, Any],
 ) -> tuple[dict[str, Any], int, bool]:
-    """Zbuduj pełen payload requestu (timestamp + encje + prefiksy).
+    """Zbuduj pełen payload requestu (timestamp + status komunikacji + encje + prefiksy).
 
     Wcześniej tę samą logikę miały zduplikowaną ``async_send_data`` i ``async_send_live_data``;
     teraz obie korzystają z tego helpera, żeby format payloadu był spójny.
 
+    Zawsze dołączamy ``inverterOnline`` (status łącza falownik↔HA, ustawiany przez
+    ``health.update_inverter_health`` w pętli live). Gdy falownik jest **offline**,
+    NIE dołączamy wartości encji — leci sam status, żeby backend nie dostał zer
+    psujących wykresy/statystyki.
+
     Zwraca: ``(payload, entities_count, ev_enabled)``.
     """
+    online = bool(coordinator_data.get("inverter_online", True))
+
+    payload: dict[str, Any] = {
+        "timestamp": dt_util.utcnow().isoformat(),
+        "inverterPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
+        "inverterOnline": online,
+    }
+
+    if not online:
+        # Falownik offline — sam status, bez wartości encji (patrz docstring).
+        return payload, 0, False
+
     inverter_data, ev_data, entities_count, ev_enabled = _build_entities_payload(
         hass, coordinator_data
     )
@@ -116,11 +133,7 @@ def _build_full_payload(
     if ev_enabled and ev_data:
         entities_payload["ev_charger"] = ev_data
 
-    payload: dict[str, Any] = {
-        "timestamp": dt_util.utcnow().isoformat(),
-        "inverterPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
-        "entities": entities_payload,
-    }
+    payload["entities"] = entities_payload
     if ev_enabled:
         payload["evPrefix"] = coordinator_data.get(CONF_EV_PREFIX, "")
 

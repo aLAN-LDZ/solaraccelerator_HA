@@ -28,11 +28,22 @@ restartu integracji.
 
 Verify
 ------
-Heurystyka po ``service`` name:
-- ``number.set_value`` — porównujemy state == value (tolerancja 1.0),
-- ``select.select_option`` — porównujemy state == option,
-- ``switch.turn_on`` / ``turn_off`` — porównujemy state == "on" / "off",
-- inne domeny — pomijamy verify (warning w logu), zwracamy success=True.
+Porównanie stanu encji z oczekiwaną wartością robi ``state_matches_expected``
+(helpers.py) — ta sama heurystyka, której używa guard "pilnuj ustawień":
+- ``set_value`` — state == value (tolerancja 1.0),
+- ``select_option`` — state == option,
+- ``turn_on`` / ``turn_off`` — state == "on" / "off",
+- inne / brak pola — akceptujemy bez sprawdzenia.
+
+Guard "pilnuj ustawień"
+-----------------------
+PRZED wykonaniem batcha rejestrujemy docelowe stany encji w ``settings_guard``
+(``register_many``), żeby przez całą godzinę pilnować że falownik ich nie
+zresetuje. Rejestrujemy najpierw (a nie po batchu), bo własne write batcha wywołują
+``state_changed`` — gdyby guard miał wtedy w ``_desired`` jeszcze stary plan,
+cofnąłby świeżo ustawioną wartość. Guard re-kolejkuje korekty z flagą ``guard`` (bez ``id`` → bez ACK);
+po ich przetworzeniu wołamy ``on_correction_processed``, żeby guard mógł próbować
+dalej. Patrz ``guard.py``.
 
 Deduplikacja cmd_id NIE jest robiona — backend wysyła komendy raz na godzinę,
 więc ryzyko duplikatu jest minimalne (verify zwykle kończy się w ~10s).
@@ -53,6 +64,7 @@ from .const import (
     DEFAULT_VERIFY_RETRIES,
     DEFAULT_VERIFY_SETTLING,
 )
+from .helpers import state_matches_expected
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,9 +112,11 @@ class WriteManager:
     def enqueue(self, commands: list[dict[str, Any]]) -> None:
         """Wrzuć batch komend do kolejki — wraca natychmiast, nie blokuje wołającego.
 
-        Komendy bez ``id`` są pomijane (nie da się zrobić ACK bez identyfikatora).
+        Akceptujemy komendy z ``id`` (z backendu, wymagają ACK) oraz z flagą
+        ``guard`` (lokalne korekty "pilnuj ustawień" — bez ACK). Pozostałe
+        pomijamy, bo nie ma jak ich potwierdzić.
         """
-        valid = [c for c in commands if c.get("id")]
+        valid = [c for c in commands if c.get("id") or c.get("guard")]
         if not valid:
             return
         self._queue.put_nowait(valid)
@@ -150,6 +164,16 @@ class WriteManager:
             "Przetwarzam batch %d komend (delay=%.2fs, settling=%.2fs, retries=%d)",
             len(batch), command_delay, verify_settling, verify_retries,
         )
+
+        # Krok 0: "pilnuj ustawień" — zarejestruj docelowe stany encji z backendu
+        # PRZED wykonaniem zapisów. Inaczej write z tego batcha wywoła ``state_changed``,
+        # a guard — mając w ``_desired`` jeszcze STARĄ wartość z poprzedniej godziny —
+        # zareagowałby natychmiast i zakolejkował korektę cofającą do starego planu.
+        # Rejestrując najpierw, guard widzi nowy cel i nie cofa świeżego ustawienia.
+        # Korekty samego guarda (flaga ``guard``) pomijamy — dotyczą encji już pilnowanych.
+        guard = self.coordinator_data.get("settings_guard")
+        if guard:
+            guard.register_many([c for c in batch if not c.get("guard")])
 
         # Licznik prób per indeks komendy w batchu — 0 = tylko pierwsza próba przeszła
         # (bez retry), 1 = jeden retry, ... Używany do diagnostyki (sensor write_stats).
@@ -220,13 +244,23 @@ class WriteManager:
                             batch[idx].get("entity_id"),
                         )
 
-        # Krok 5: zaktualizuj statystyki diagnostyczne i wyślij ACK
+        # Krok 5: zaktualizuj statystyki diagnostyczne
         self._update_write_stats(batch, verify_results, retry_counts)
 
+        # Krok 7: ACK do backendu — tylko komendy z ``id``. Korekty guarda nie mają
+        # identyfikatora (nie pochodzą z kolejki serwera), więc ich nie potwierdzamy.
         for cmd, (verify_ok, verify_error) in zip(batch, verify_results):
-            await async_ack_command(
-                self.hass, self.coordinator_data, cmd["id"], verify_ok, verify_error,
-            )
+            if cmd.get("id"):
+                await async_ack_command(
+                    self.hass, self.coordinator_data, cmd["id"], verify_ok, verify_error,
+                )
+
+        # Krok 8: zwolnij korekty guarda z dedup ``_pending`` — niezależnie od wyniku,
+        # żeby guard mógł próbować dalej jeśli wartość znów ucieknie.
+        if guard:
+            for cmd in batch:
+                if cmd.get("guard"):
+                    guard.on_correction_processed(cmd.get("entity_id"))
 
     # === Pojedyncze operacje ===
 
@@ -263,7 +297,9 @@ class WriteManager:
     def _verify_one(self, cmd: dict[str, Any]) -> tuple[bool, str | None]:
         """Sprawdź czy encja ma wartość zgodną z tym co ustawialiśmy.
 
-        Heurystyka po service name — patrz docstring modułu.
+        Porównanie stanu deleguje do ``state_matches_expected`` (helpers.py) —
+        ta sama heurystyka, której używa guard "pilnuj ustawień". Tu dokładamy
+        tylko kontekst verify: sprawdzenie istnienia encji i prefiks komunikatu.
         Zwraca ``(success, error_message)``. Sukces = falownik faktycznie przyjął write.
         """
         service = cmd.get("service") or ""
@@ -274,45 +310,10 @@ class WriteManager:
         if state_obj is None:
             return (False, f"Verify: encja {entity_id} nie istnieje w HA")
 
-        actual = state_obj.state
-        if actual in ("unknown", "unavailable"):
-            return (False, f"Verify: encja {entity_id} ma stan {actual}")
-
-        # number.set_value — porównujemy liczbę z tolerancją
-        if service == "set_value":
-            expected = service_data.get("value")
-            if expected is None:
-                _LOGGER.warning("Verify: brak pola 'value' w komendzie dla %s", entity_id)
-                return (True, None)
-            try:
-                if abs(float(actual) - float(expected)) < 1.0:
-                    return (True, None)
-                return (False, f"Verify: oczekiwano {expected}, jest {actual}")
-            except (ValueError, TypeError):
-                return (False, f"Verify: niepoliczalne wartości expected={expected} actual={actual}")
-
-        # select.select_option — porównujemy string
-        if service == "select_option":
-            expected = service_data.get("option")
-            if expected is None:
-                _LOGGER.warning("Verify: brak pola 'option' w komendzie dla %s", entity_id)
-                return (True, None)
-            if actual == expected:
-                return (True, None)
-            return (False, f"Verify: oczekiwano '{expected}', jest '{actual}'")
-
-        # switch.turn_on / turn_off — porównujemy ze stałą "on"/"off"
-        if service == "turn_on":
-            return (True, None) if actual == "on" else (False, f"Verify: oczekiwano on, jest {actual}")
-        if service == "turn_off":
-            return (True, None) if actual == "off" else (False, f"Verify: oczekiwano off, jest {actual}")
-
-        # Inne domeny — nie wiemy jak verify'ować, akceptujemy z warningiem
-        _LOGGER.warning(
-            "Verify: brak heurystyki dla service '%s' (entity %s) — akceptuję bez sprawdzenia",
-            service, entity_id,
-        )
-        return (True, None)
+        ok, reason = state_matches_expected(service, service_data, state_obj.state)
+        if ok:
+            return (True, None)
+        return (False, f"Verify: {reason} (encja {entity_id})")
 
     # === Odczyt konfiguracji z encji number ===
 

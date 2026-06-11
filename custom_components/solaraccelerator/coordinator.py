@@ -32,6 +32,7 @@ from .const import (
     LIVE_AUTH_RETRY,
     LIVE_DISABLED_RETRY,
 )
+from .health import update_inverter_health
 from .helpers import get_next_full_hour, get_seconds_until_next_hour
 
 _LOGGER = logging.getLogger(__name__)
@@ -71,7 +72,9 @@ async def async_send_data_hourly(
             send_success = await async_send_data(hass, coordinator_data)
             await async_fetch_prices(hass, coordinator_data)
 
-            if send_success:
+            # Gdy falownik offline, paczka nie niesie wartości encji — nie ma sensu
+            # czekać na data-ready ani fetchować profitu (backend nie dostał nowych danych).
+            if send_success and coordinator_data.get("inverter_online", True):
                 # Krok 2: czekamy aż backend przetworzy paczkę (do ok. 5 minut)
                 max_retries = 30
                 retry_interval = 10  # sekund między próbami
@@ -132,6 +135,10 @@ async def async_send_live_data_loop(
 
     while True:
         try:
+            # Najpierw zaktualizuj status komunikacji falownik↔HA (vitale + debounce) —
+            # async_send_live_data zbuduje payload czytając zadeklarowany inverter_online.
+            update_inverter_health(hass, coordinator_data)
+
             status, server_interval, retry_after, pending_commands = await async_send_live_data(
                 hass, coordinator_data
             )

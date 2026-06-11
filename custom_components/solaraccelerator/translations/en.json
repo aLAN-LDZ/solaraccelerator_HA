@@ -253,6 +253,11 @@
         "name": "Live Interval"
       }
     },
+    "binary_sensor": {
+      "inverter_comms": {
+        "name": "Inverter communication"
+      }
+    },
     "button": {
       "sync": {
         "name": "Synchronize"
@@ -267,6 +272,11 @@
       },
       "verify_retries": {
         "name": "Verify retries"
+      }
+    },
+    "switch": {
+      "guard_enabled": {
+        "name": "Enforce settings"
       }
     }
   }
