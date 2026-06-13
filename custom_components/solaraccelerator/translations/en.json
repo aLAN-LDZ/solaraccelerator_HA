@@ -279,5 +279,40 @@
         "name": "Enforce settings"
       }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Shared devices",
+        "description": "Manage additional controllable loads (EV charger, water heater, heat pump…) shared with Solar Accelerator. Currently configured: {count}.",
+        "menu_options": {
+          "add_device": "Add device",
+          "remove_device": "Remove device",
+          "save": "Save and finish"
+        }
+      },
+      "add_device": {
+        "title": "Add controllable load",
+        "data": {
+          "label": "Name",
+          "device_type": "Device type",
+          "switch_entity": "Switch entity",
+          "power_sensor": "Power entity (optional)",
+          "energy_sensor": "Energy kWh entity (optional)",
+          "status_entity": "Status entity (optional, e.g. charger status)",
+          "nominal_power_w": "Rated power (W, optional)"
+        }
+      },
+      "remove_device": {
+        "title": "Remove devices",
+        "data": {
+          "remove": "Select to remove"
+        }
+      }
+    },
+    "error": {
+      "label_required": "Enter a device name.",
+      "entity_required": "Select a switch entity."
+    }
   }
 }

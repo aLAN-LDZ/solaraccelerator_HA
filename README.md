@@ -134,6 +134,27 @@ Wysyłane tylko gdy włączysz ładowarkę EV i podasz prefix.
 | `error_code` | Kod błędu | - |
 | `transaction_id` | ID transakcji | - |
 
+## Sterowalne odbiorniki (Konfiguruj)
+
+Poza falownikiem i ładowarką możesz udostępnić serwisowi dodatkowe **sterowalne
+odbiorniki** (CWU/bojler, pompa ciepła, druga ładowarka itp.), które
+optymalizator będzie mógł uruchamiać w najtańszych godzinach lub przy nadwyżce
+produkcji.
+
+Na karcie integracji w Home Assistant kliknij **Konfiguruj** — otworzy się menu:
+
+- **Dodaj urządzenie** — podajesz nazwę, typ (EV / CWU / pompa / inne), encję
+  włącznika (`switch`/`input_boolean`) oraz opcjonalnie encje mocy, energii i
+  statusu i moc znamionową.
+- **Usuń urządzenie** — zaznaczasz urządzenia do skasowania.
+- **Zapisz i zakończ** — lista trafia do serwisu (pojawi się w
+  `Konfiguracja PV → Sterowalne odbiorniki`), a integracja przeładuje się
+  automatycznie.
+
+Definicje i bieżący stan tych encji są dosyłane w każdej paczce danych. Sam
+sposób ładowania (np. tryby EV: „teraz" / „do rana" / „najlepsze okno")
+ustawiasz po stronie serwisu.
+
 ## Sterowanie falownikiem
 
 Integracja może odbierać komendy z serwisu SolarAccelerator i zapisywać ustawienia falownika (np. tryb pracy, limity prądu ładowania/rozładowania, harmonogram). Komendy są wykonywane przez wewnętrzny **WriteManager**, który:
