@@ -30,6 +30,7 @@ from .const import (
     CONF_EV_PREFIX,
     CONF_SERVER_URL,
     CONF_SOLARMAN_PREFIX,
+    CONF_CONTROLLABLE_DEVICES,
     API_COMMAND_ACK_ENDPOINT,
     API_DATA_READY_ENDPOINT,
     API_LIVE_ENDPOINT,
@@ -137,7 +138,55 @@ def _build_full_payload(
     if ev_enabled:
         payload["evPrefix"] = coordinator_data.get(CONF_EV_PREFIX, "")
 
+    # Custom sterowalne odbiorniki (OptionsFlow → entry.options). Wysyłamy definicje
+    # (encje + typ) jako discovery — backend mapuje je na katalog urządzeń
+    # (metadata.additionalDevices). Dorzucamy też bieżący stan switcha, gdy dostępny.
+    controllable = _build_controllable_payload(hass, coordinator_data)
+    if controllable:
+        payload["controllable_devices"] = controllable
+
     return payload, entities_count, ev_enabled
+
+
+def _build_controllable_payload(
+    hass: HomeAssistant,
+    coordinator_data: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Zbierz definicje custom sterowalnych odbiorników + bieżący stan ich encji.
+
+    Lista pochodzi z OptionsFlow (``CONF_CONTROLLABLE_DEVICES``). Każdy wpis to
+    definicja (key/label/device_type + encje), wzbogacona o ``switch_state``
+    (on/off) i — jeśli skonfigurowane — odczyty mocy/energii/statusu.
+    """
+    devices = coordinator_data.get(CONF_CONTROLLABLE_DEVICES) or []
+    out: list[dict[str, Any]] = []
+
+    for dev in devices:
+        switch_entity = dev.get("switch_entity")
+        switch_state = None
+        if switch_entity and (st := hass.states.get(switch_entity)):
+            switch_state = st.state
+
+        entry: dict[str, Any] = {
+            "key": dev.get("key"),
+            "label": dev.get("label"),
+            "device_type": dev.get("device_type", "other"),
+            "switch_entity": switch_entity,
+            "switch_state": switch_state,
+            "power_sensor": dev.get("power_sensor"),
+            "energy_sensor": dev.get("energy_sensor"),
+            "status_entity": dev.get("status_entity"),
+            "nominal_power_w": dev.get("nominal_power_w"),
+        }
+
+        for field, sensor_key in (("power_w", "power_sensor"), ("energy_kwh", "energy_sensor"), ("status", "status_entity")):
+            sensor_id = dev.get(sensor_key)
+            if sensor_id and (s := hass.states.get(sensor_id)):
+                entry[field] = s.state
+
+        out.append(entry)
+
+    return out
 
 
 async def async_send_data(

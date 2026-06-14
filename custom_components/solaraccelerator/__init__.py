@@ -26,6 +26,7 @@ from .const import (
     CONF_SOLARMAN_PREFIX,
     CONF_EV_ENABLED,
     CONF_EV_PREFIX,
+    CONF_CONTROLLABLE_DEVICES,
     DATA_GUARD_ENABLED,
     DEFAULT_COMMAND_DELAY,
     DEFAULT_GUARD_ENABLED,
@@ -59,6 +60,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_SOLARMAN_PREFIX: entry.data.get(CONF_SOLARMAN_PREFIX, ""),
         CONF_EV_ENABLED: entry.data.get(CONF_EV_ENABLED, False),
         CONF_EV_PREFIX: entry.data.get(CONF_EV_PREFIX, ""),
+        # Custom sterowalne odbiorniki z OptionsFlow (entry.options, edytowalne bez
+        # ponownego dodawania integracji). Dosyłane w payloadzie jako controllable_devices.
+        CONF_CONTROLLABLE_DEVICES: entry.options.get(CONF_CONTROLLABLE_DEVICES, []),
         # Stan pętli godzinowej
         "last_sent": None,
         "next_scheduled": None,
@@ -131,7 +135,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Reload integracji po zmianie opcji (OptionsFlow) — żeby nowa lista
+    # sterowalnych encji trafiła do coordinator_data bez ręcznego restartu.
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+
     return True
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Przeładuj wpis po zapisaniu opcji (dodanie/usunięcie udostępnianych encji)."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

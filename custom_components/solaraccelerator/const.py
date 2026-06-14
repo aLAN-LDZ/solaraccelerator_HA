@@ -21,6 +21,20 @@ CONF_EV_CONFIG_MODE = "ev_config_mode"
 CONF_INVERTER_MODEL = "inverter_model"
 CONF_EV_MODEL = "ev_model"
 
+# Custom sterowalne odbiorniki dodawane w OptionsFlow (przycisk "Konfiguruj").
+# Lista słowników: {key, label, device_type, switch_entity, power_sensor,
+# energy_sensor, status_entity, nominal_power_w}. Trzymane w entry.options.
+CONF_CONTROLLABLE_DEVICES = "controllable_devices"
+
+# Typy sterowalnych odbiorników (do selecta w OptionsFlow). Spójne z device_type
+# po stronie backendu (additional_loads.device_type).
+CONTROLLABLE_DEVICE_TYPES = [
+    {"value": "ev", "label": "Ładowarka EV"},
+    {"value": "cwu", "label": "CWU / bojler"},
+    {"value": "hvac", "label": "Klimatyzacja / pompa ciepła"},
+    {"value": "other", "label": "Inne"},
+]
+
 # Tryby konfiguracji wybierane w config flow:
 # - SOLARMAN: użytkownik podaje prefix integracji Solarman/OCPP a my budujemy mapowanie automatycznie
 # - MANUAL:   użytkownik mapuje każdą encję ręcznie

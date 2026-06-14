@@ -279,5 +279,40 @@
         "name": "Pilnuj ustawień"
       }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Udostępniane urządzenia",
+        "description": "Zarządzaj dodatkowymi sterowalnymi odbiornikami (ładowarka EV, CWU, pompa…) udostępnianymi do Solar Accelerator. Aktualnie skonfigurowane: {count}.",
+        "menu_options": {
+          "add_device": "Dodaj urządzenie",
+          "remove_device": "Usuń urządzenie",
+          "save": "Zapisz i zakończ"
+        }
+      },
+      "add_device": {
+        "title": "Dodaj sterowalny odbiornik",
+        "data": {
+          "label": "Nazwa",
+          "device_type": "Typ urządzenia",
+          "switch_entity": "Encja włącznika (switch)",
+          "power_sensor": "Encja mocy (opcjonalnie)",
+          "energy_sensor": "Encja energii kWh (opcjonalnie)",
+          "status_entity": "Encja statusu (opcjonalnie, np. status ładowarki)",
+          "nominal_power_w": "Moc znamionowa (W, opcjonalnie)"
+        }
+      },
+      "remove_device": {
+        "title": "Usuń urządzenia",
+        "data": {
+          "remove": "Zaznacz do usunięcia"
+        }
+      }
+    },
+    "error": {
+      "label_required": "Podaj nazwę urządzenia.",
+      "entity_required": "Wybierz encję włącznika."
+    }
   }
 }
