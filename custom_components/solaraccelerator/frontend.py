@@ -37,7 +37,8 @@ from .const import CONF_API_KEY, CONF_SERVER_URL, DEFAULT_SERVER_URL, DOMAIN
 LOGGER = logging.getLogger(__name__)
 
 # Ścieżka bundla karty na backendzie (źródło do pobrania server-side).
-CARD_JS_BACKEND_PATH = "/ha-card/sa-chart"
+# Statyk z public/ — Nitro serwuje go bezpośrednio, bez parsowania.
+CARD_JS_BACKEND_PATH = "/ha-card/sa-chart.js"
 
 # Lokalna ścieżka, pod którą HA serwuje bundel przeglądarce (same-origin).
 CARD_LOCAL_URL = "/solaraccelerator_static/sa-chart.js"
