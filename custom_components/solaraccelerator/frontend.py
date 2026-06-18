@@ -52,6 +52,7 @@ _CACHE_FILENAME = "sa-chart.js"
 _CHART_ENDPOINTS: dict[str, str] = {
     "prices": "/api/homeassistant/price-series",
     "profit": "/api/homeassistant/profit-series",
+    "plan": "/api/homeassistant/plan-series",
 }
 
 # Whitelist parametru period — nie forwardujemy dowolnego query do backendu.
