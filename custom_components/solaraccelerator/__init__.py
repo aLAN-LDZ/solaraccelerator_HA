@@ -35,7 +35,7 @@ from .const import (
     DEFAULT_SERVER_URL,
     DEFAULT_VERIFY_SETTLING,
 )
-from .frontend import async_register_card_resource, async_register_chart_view
+from .frontend import async_register_chart_view, async_setup_card
 from .guard import SettingsGuard
 from .write_manager import WriteManager
 
@@ -139,12 +139,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Karty Lovelace: proxy danych (server-side, dokłada klucz API z konfiguracji)
-    # + rejestracja bundla karty serwowanego przez backend (opcja B). Obie funkcje
-    # są idempotentne — bezpieczne przy wielu wpisach konfiguracji.
+    # + bundel karty pobierany z backendu i serwowany LOKALNIE z HA (działa nawet
+    # gdy sieć przeglądarki blokuje domenę backendu). Idempotentne.
     async_register_chart_view(hass)
     server_url = entry.data.get(CONF_SERVER_URL) or DEFAULT_SERVER_URL
     integration = await async_get_integration(hass, DOMAIN)
-    async_register_card_resource(hass, server_url, integration.version)
+    await async_setup_card(hass, server_url, integration.version)
 
     # Reload integracji po zmianie opcji (OptionsFlow) — żeby nowa lista
     # sterowalnych encji trafiła do coordinator_data bez ręcznego restartu.

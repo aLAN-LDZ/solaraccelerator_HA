@@ -5,22 +5,26 @@ Dwie odpowiedzialności:
 1. **Proxy danych** (`SolarAcceleratorChartView`) — endpoint na serwerze HA, do
    którego uderza karta (same-origin, auth sesją HA). Proxy dokłada
    ``Authorization: Bearer <api_key>`` z konfiguracji integracji i woła backend.
-   Dzięki temu klucz API NIGDY nie trafia do przeglądarki.
+   Klucz API NIGDY nie trafia do przeglądarki.
 
-2. **Rejestracja zasobu JS** (opcja B) — bundel karty serwuje backend pod
-   ``/ha-card/sa-chart.js``; rejestrujemy go jako zasób frontendu, więc user nie
-   dodaje go ręcznie.
+2. **Bundel karty serwowany LOKALNIE z HA** — integracja pobiera ``sa-chart.js``
+   z backendu *server-side* (HA → backend), zapisuje w cache i serwuje przez
+   statyczną ścieżkę HA. Dzięki temu przeglądarka ładuje JS z tego samego hosta
+   co reszta HA — działa nawet gdy sieć przeglądarki (np. firmowa) blokuje domenę
+   backendu. Dane i tak idą przez proxy (server-side), więc jedyna zależność od
+   backendu jest po stronie serwera HA, nie przeglądarki. Fallback: gdy backend
+   nieosiągalny przy starcie, serwujemy ostatni zapisany bundel.
 
 Bezpieczeństwo proxy (świadome decyzje):
 - ``requires_auth = True`` (domyślne w HomeAssistantView) — tylko zalogowany user HA.
 - **Sztywna allowlista** nazwa→ścieżka (``_CHART_ENDPOINTS``) — NIE open-relay.
-  Generyczny pass-through (``?url=...``) byłby SSRF i wyciekiem klucza.
-- Tylko GET, timeout, whitelist parametru ``period`` (nie forwardujemy dowolnego query).
+- Tylko GET, timeout, whitelist parametru ``period``.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from http import HTTPStatus
 
 import aiohttp
@@ -32,9 +36,15 @@ from .const import CONF_API_KEY, CONF_SERVER_URL, DEFAULT_SERVER_URL, DOMAIN
 
 LOGGER = logging.getLogger(__name__)
 
-# Ścieżka bundla karty serwowanego przez backend (opcja B).
-# Bez rozszerzenia .js — typ wyznacza Content-Type route'a Nitro.
-CARD_JS_PATH = "/ha-card/sa-chart"
+# Ścieżka bundla karty na backendzie (źródło do pobrania server-side).
+CARD_JS_BACKEND_PATH = "/ha-card/sa-chart"
+
+# Lokalna ścieżka, pod którą HA serwuje bundel przeglądarce (same-origin).
+CARD_LOCAL_URL = "/solaraccelerator_static/sa-chart.js"
+
+# Plik cache w katalogu konfiguracji HA (config/solaraccelerator/sa-chart.js).
+_CACHE_SUBDIR = "solaraccelerator"
+_CACHE_FILENAME = "sa-chart.js"
 
 # Allowlista: nazwa wykresu (z karty) -> read-only ścieżka na backendzie.
 # KLUCZOWE: brak generycznego pass-through. Nowe wykresy = nowy wpis tutaj.
@@ -112,16 +122,76 @@ def async_register_chart_view(hass: HomeAssistant) -> None:
     hass.data[_VIEW_REGISTERED] = True
 
 
-def async_register_card_resource(hass: HomeAssistant, server_url: str, version: str) -> None:
-    """Zarejestruj bundel karty (serwowany przez backend) jako zasób frontendu.
+async def _refresh_card_bundle(hass: HomeAssistant, server_url: str, cache_file: str) -> None:
+    """Pobierz bundel karty z backendu (server-side) i zapisz w cache.
 
-    ``?v=<version>`` busti cache HA przy aktualizacji integracji.
+    Przy niepowodzeniu zostaje ostatni zapisany plik (fallback), więc karta
+    działa nawet gdy backend jest chwilowo nieosiągalny.
     """
+    url = f"{server_url.rstrip('/')}{CARD_JS_BACKEND_PATH}"
+    session = async_get_clientsession(hass)
+    try:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"HTTP {resp.status}")
+            content = await resp.read()
+    except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError) as err:
+        LOGGER.warning(
+            "Nie pobrano bundla karty z %s (%s) — używam cache jeśli istnieje", url, err
+        )
+        return
+
+    def _write() -> None:
+        os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+        tmp = f"{cache_file}.tmp"
+        with open(tmp, "wb") as fh:
+            fh.write(content)
+        os.replace(tmp, cache_file)
+
+    await hass.async_add_executor_job(_write)
+    LOGGER.info("Pobrano bundel karty (%d B) z backendu do cache", len(content))
+
+
+async def async_setup_card(hass: HomeAssistant, server_url: str, version: str) -> None:
+    """Odśwież bundel z backendu i wystaw go LOKALNIE z HA (idempotentnie).
+
+    Przeglądarka ładuje JS z tego samego hosta co HA — niezależnie od tego, czy
+    jej sieć dosięga domeny backendu.
+    """
+    cache_file = hass.config.path(_CACHE_SUBDIR, _CACHE_FILENAME)
+
+    # Odśwież cache przy każdym setupie (auto-update z backendu, server-side).
+    await _refresh_card_bundle(hass, server_url, cache_file)
+
+    # Statyk + zasób rejestrujemy tylko raz.
     if hass.data.get(_CARD_REGISTERED):
         return
+
+    if not await hass.async_add_executor_job(os.path.exists, cache_file):
+        LOGGER.warning(
+            "Bundel karty niedostępny (backend nieosiągalny i brak cache) — "
+            "karta pominięta, spróbuję ponownie przy następnym starcie"
+        )
+        return
+
+    # Serwuj plik z cache pod lokalnym URL HA (bez auth — to publiczny JS bez sekretów).
+    await _register_static(hass, cache_file)
+
     from homeassistant.components.frontend import add_extra_js_url
 
-    url = f"{server_url.rstrip('/')}{CARD_JS_PATH}?v={version}"
-    add_extra_js_url(hass, url)
+    add_extra_js_url(hass, f"{CARD_LOCAL_URL}?v={version}")
     hass.data[_CARD_REGISTERED] = True
-    LOGGER.info("Zarejestrowano kartę Lovelace Solar Accelerator: %s", url)
+    LOGGER.info("Karta Lovelace Solar Accelerator serwowana lokalnie z HA: %s", CARD_LOCAL_URL)
+
+
+async def _register_static(hass: HomeAssistant, cache_file: str) -> None:
+    """Zarejestruj statyczną ścieżkę (nowe async API, fallback na starsze sync)."""
+    try:
+        from homeassistant.components.http import StaticPathConfig
+
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(CARD_LOCAL_URL, cache_file, True)]
+        )
+    except (ImportError, AttributeError):
+        # Starsze HA — deprecated sync API.
+        hass.http.register_static_path(CARD_LOCAL_URL, cache_file, True)
