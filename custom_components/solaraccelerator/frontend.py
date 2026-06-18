@@ -1,0 +1,127 @@
+"""Wsparcie kart Lovelace Solar Accelerator.
+
+Dwie odpowiedzialności:
+
+1. **Proxy danych** (`SolarAcceleratorChartView`) — endpoint na serwerze HA, do
+   którego uderza karta (same-origin, auth sesją HA). Proxy dokłada
+   ``Authorization: Bearer <api_key>`` z konfiguracji integracji i woła backend.
+   Dzięki temu klucz API NIGDY nie trafia do przeglądarki.
+
+2. **Rejestracja zasobu JS** (opcja B) — bundel karty serwuje backend pod
+   ``/ha-card/sa-chart.js``; rejestrujemy go jako zasób frontendu, więc user nie
+   dodaje go ręcznie.
+
+Bezpieczeństwo proxy (świadome decyzje):
+- ``requires_auth = True`` (domyślne w HomeAssistantView) — tylko zalogowany user HA.
+- **Sztywna allowlista** nazwa→ścieżka (``_CHART_ENDPOINTS``) — NIE open-relay.
+  Generyczny pass-through (``?url=...``) byłby SSRF i wyciekiem klucza.
+- Tylko GET, timeout, whitelist parametru ``period`` (nie forwardujemy dowolnego query).
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+from http import HTTPStatus
+
+import aiohttp
+from homeassistant.components.http import HomeAssistantView
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+from .const import CONF_API_KEY, CONF_SERVER_URL, DEFAULT_SERVER_URL, DOMAIN
+
+LOGGER = logging.getLogger(__name__)
+
+# Ścieżka bundla karty serwowanego przez backend (opcja B).
+# Bez rozszerzenia .js — typ wyznacza Content-Type route'a Nitro.
+CARD_JS_PATH = "/ha-card/sa-chart"
+
+# Allowlista: nazwa wykresu (z karty) -> read-only ścieżka na backendzie.
+# KLUCZOWE: brak generycznego pass-through. Nowe wykresy = nowy wpis tutaj.
+_CHART_ENDPOINTS: dict[str, str] = {
+    "prices": "/api/homeassistant/price-series",
+}
+
+# Whitelist parametru period — nie forwardujemy dowolnego query do backendu.
+_ALLOWED_PERIODS = {"today", "week", "month"}
+
+# Flagi w hass.data — rejestrujemy raz, niezależnie od liczby config entries.
+_VIEW_REGISTERED = f"{DOMAIN}_chart_view_registered"
+_CARD_REGISTERED = f"{DOMAIN}_card_resource_registered"
+
+
+class SolarAcceleratorChartView(HomeAssistantView):
+    """Proxy GET dla danych wykresów kart Lovelace."""
+
+    url = "/api/solaraccelerator/chart/{name}"
+    name = "api:solaraccelerator:chart"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self.hass = hass
+
+    def _entry_config(self) -> dict | None:
+        """Pierwsza skonfigurowana integracja z kluczem API (zwykle jedna)."""
+        for value in self.hass.data.get(DOMAIN, {}).values():
+            if isinstance(value, dict) and value.get(CONF_API_KEY):
+                return value
+        return None
+
+    async def get(self, request, name: str):
+        backend_path = _CHART_ENDPOINTS.get(name)
+        if backend_path is None:
+            return self.json_message("Nieznany wykres", HTTPStatus.NOT_FOUND)
+
+        cfg = self._entry_config()
+        if not cfg:
+            return self.json_message("Integracja nieskonfigurowana", HTTPStatus.BAD_GATEWAY)
+
+        api_key = cfg.get(CONF_API_KEY)
+        server_url = cfg.get(CONF_SERVER_URL) or DEFAULT_SERVER_URL
+
+        period = request.query.get("period", "today")
+        if period not in _ALLOWED_PERIODS:
+            period = "today"
+
+        session = async_get_clientsession(self.hass)
+        url = f"{server_url}{backend_path}"
+        try:
+            async with session.get(
+                url,
+                headers={"Authorization": f"Bearer {api_key}"},
+                params={"period": period},
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                # Backend zwraca czysty JSON również dla błędów — przepuszczamy status + body.
+                try:
+                    data = await resp.json()
+                except (aiohttp.ContentTypeError, ValueError):
+                    return self.json_message(
+                        "Nieprawidłowa odpowiedź backendu", HTTPStatus.BAD_GATEWAY
+                    )
+                return self.json(data, status_code=resp.status)
+        except (aiohttp.ClientError, asyncio.TimeoutError):
+            LOGGER.warning("Proxy wykresu '%s': błąd połączenia z backendem", name)
+            return self.json_message("Błąd połączenia z backendem", HTTPStatus.BAD_GATEWAY)
+
+
+def async_register_chart_view(hass: HomeAssistant) -> None:
+    """Zarejestruj proxy danych (idempotentnie)."""
+    if hass.data.get(_VIEW_REGISTERED):
+        return
+    hass.http.register_view(SolarAcceleratorChartView(hass))
+    hass.data[_VIEW_REGISTERED] = True
+
+
+def async_register_card_resource(hass: HomeAssistant, server_url: str, version: str) -> None:
+    """Zarejestruj bundel karty (serwowany przez backend) jako zasób frontendu.
+
+    ``?v=<version>`` busti cache HA przy aktualizacji integracji.
+    """
+    if hass.data.get(_CARD_REGISTERED):
+        return
+    from homeassistant.components.frontend import add_extra_js_url
+
+    url = f"{server_url.rstrip('/')}{CARD_JS_PATH}?v={version}"
+    add_extra_js_url(hass, url)
+    hass.data[_CARD_REGISTERED] = True
+    LOGGER.info("Zarejestrowano kartę Lovelace Solar Accelerator: %s", url)
