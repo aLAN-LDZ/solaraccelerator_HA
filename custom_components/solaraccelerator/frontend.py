@@ -50,6 +50,7 @@ _CACHE_FILENAME = "sa-chart.js"
 # KLUCZOWE: brak generycznego pass-through. Nowe wykresy = nowy wpis tutaj.
 _CHART_ENDPOINTS: dict[str, str] = {
     "prices": "/api/homeassistant/price-series",
+    "profit": "/api/homeassistant/profit-series",
 }
 
 # Whitelist parametru period — nie forwardujemy dowolnego query do backendu.
