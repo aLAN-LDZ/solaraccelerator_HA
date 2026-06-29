@@ -28,6 +28,11 @@ CONF_EV_MODEL = "ev_model"
 # energy_sensor, status_entity, nominal_power_w}. Trzymane w entry.options.
 CONF_CONTROLLABLE_DEVICES = "controllable_devices"
 
+# Szkic profilu tworzony w OptionsFlow (kreator "Zgłoś / eksportuj profil").
+# Słownik: {manufacturer, model, source, prefix, capabilities{}, control_mapping{}}.
+# Trzymany w entry.options; czytany przez diagnostics.py do wygenerowania eksportu.
+CONF_PROFILE_DRAFT = "profile_draft"
+
 # Typy sterowalnych odbiorników (do selecta w OptionsFlow). Wartość ``value``
 # jest wysyłana do serwisu jako typ urządzenia.
 CONTROLLABLE_DEVICE_TYPES = [

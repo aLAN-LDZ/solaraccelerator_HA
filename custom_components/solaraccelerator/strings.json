@@ -293,7 +293,8 @@
         "menu_options": {
           "add_device": "Dodaj urządzenie",
           "remove_device": "Usuń urządzenie",
-          "save": "Zapisz i zakończ"
+          "save": "Zapisz i zakończ",
+          "export_profile": "Zgłoś / eksportuj profil"
         }
       },
       "add_device": {
@@ -312,6 +313,84 @@
         "title": "Usuń urządzenia",
         "data": {
           "remove": "Zaznacz do usunięcia"
+        }
+      },
+      "export_profile": {
+        "title": "Zgłoś / eksportuj profil — urządzenie",
+        "description": "Podaj producenta, model i źródło integracji. Te dane zbudują profil, który prześlesz do dodania oficjalnego wsparcia.",
+        "data": {
+          "manufacturer": "Producent",
+          "model": "Model",
+          "source": "Źródło / typ integracji",
+          "prefix": "Prefiks encji"
+        }
+      },
+      "profile_capabilities": {
+        "title": "Capabilities — co falownik potrafi",
+        "description": "Zaznacz funkcje, które Twój falownik obsługuje. Optymalizator nie wybierze akcji spoza tej listy.",
+        "data": {
+          "grid_charge": "Ładowanie baterii z sieci",
+          "export": "Eksport energii do sieci",
+          "soc_control": "Sterowanie docelowym SOC baterii",
+          "mixed_charging": "Jednoczesne ładowanie PV + sieć"
+        }
+      },
+      "profile_summary": {
+        "title": "Podsumowanie i eksport",
+        "description": "Szkic profilu gotowy: encje odczytu: {read_count}, encje sterujące: {control_count}, do ręcznego sprawdzenia (niejednolite nazwy): {literal_count}.\nDocelowy plik: {file_path}\n\nZatwierdź, aby zapisać. Następnie pobierz profil przez: Ustawienia → Urządzenia i usługi → Solar Accelerator → ⋮ → Pobierz diagnostykę, i prześlij plik do dodania wsparcia.",
+        "data": {}
+      },
+      "control_inverter": {
+        "title": "Sterowanie — Tryb pracy inwertera",
+        "description": "Zmapuj encje sterujące (opcjonalnie). Pozostaw puste, jeśli falownik ich nie ma.",
+        "data": {
+          "work_mode": "Tryb pracy"
+        }
+      },
+      "control_battery": {
+        "title": "Sterowanie — Sterowanie baterią",
+        "description": "Zmapuj encje sterujące (opcjonalnie). Pozostaw puste, jeśli falownik ich nie ma.",
+        "data": {
+          "battery_max_charge_current": "Maks. prąd ładowania baterii",
+          "battery_max_discharge_current": "Maks. prąd rozładowania baterii"
+        }
+      },
+      "control_grid": {
+        "title": "Sterowanie — Sterowanie siecią",
+        "description": "Zmapuj encje sterujące (opcjonalnie). Pozostaw puste, jeśli falownik ich nie ma.",
+        "data": {
+          "grid_peak_shaving": "Peak shaving z sieci"
+        }
+      },
+      "control_pv": {
+        "title": "Sterowanie — Sterowanie PV",
+        "description": "Zmapuj encje sterujące (opcjonalnie). Pozostaw puste, jeśli falownik ich nie ma.",
+        "data": {
+          "pv_power_limit": "Limit mocy PV"
+        }
+      },
+      "control_schedule": {
+        "title": "Sterowanie — Harmonogram (TOU)",
+        "description": "Zmapuj encje sterujące (opcjonalnie). Pozostaw puste, jeśli falownik ich nie ma.",
+        "data": {
+          "tou_1_time": "TOU slot 1 — godzina startu",
+          "tou_1_soc": "TOU slot 1 — docelowy SOC",
+          "tou_1_charge_mode": "TOU slot 1 — tryb ładowania",
+          "tou_2_time": "TOU slot 2 — godzina startu",
+          "tou_2_soc": "TOU slot 2 — docelowy SOC",
+          "tou_2_charge_mode": "TOU slot 2 — tryb ładowania",
+          "tou_3_time": "TOU slot 3 — godzina startu",
+          "tou_3_soc": "TOU slot 3 — docelowy SOC",
+          "tou_3_charge_mode": "TOU slot 3 — tryb ładowania",
+          "tou_4_time": "TOU slot 4 — godzina startu",
+          "tou_4_soc": "TOU slot 4 — docelowy SOC",
+          "tou_4_charge_mode": "TOU slot 4 — tryb ładowania",
+          "tou_5_time": "TOU slot 5 — godzina startu",
+          "tou_5_soc": "TOU slot 5 — docelowy SOC",
+          "tou_5_charge_mode": "TOU slot 5 — tryb ładowania",
+          "tou_6_time": "TOU slot 6 — godzina startu",
+          "tou_6_soc": "TOU slot 6 — docelowy SOC",
+          "tou_6_charge_mode": "TOU slot 6 — tryb ładowania"
         }
       }
     },

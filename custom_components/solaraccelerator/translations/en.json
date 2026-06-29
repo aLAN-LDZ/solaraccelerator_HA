@@ -293,7 +293,8 @@
         "menu_options": {
           "add_device": "Add device",
           "remove_device": "Remove device",
-          "save": "Save and finish"
+          "save": "Save and finish",
+          "export_profile": "Report / export profile"
         }
       },
       "add_device": {
@@ -312,6 +313,84 @@
         "title": "Remove devices",
         "data": {
           "remove": "Select to remove"
+        }
+      },
+      "export_profile": {
+        "title": "Report / export profile — device",
+        "description": "Enter the manufacturer, model and integration source. This builds a profile you can send us to add official support.",
+        "data": {
+          "manufacturer": "Manufacturer",
+          "model": "Model",
+          "source": "Source / integration type",
+          "prefix": "Entity prefix"
+        }
+      },
+      "profile_capabilities": {
+        "title": "Capabilities — what the inverter can do",
+        "description": "Tick the functions your inverter supports. The optimizer won't pick actions outside this list.",
+        "data": {
+          "grid_charge": "Charge battery from grid",
+          "export": "Export energy to grid",
+          "soc_control": "Target battery SOC control",
+          "mixed_charging": "Simultaneous PV + grid charging"
+        }
+      },
+      "profile_summary": {
+        "title": "Summary and export",
+        "description": "Profile draft ready: read entities: {read_count}, control entities: {control_count}, need manual review (non-uniform names): {literal_count}.\nTarget file: {file_path}\n\nConfirm to save. Then download the profile via: Settings → Devices & Services → Solar Accelerator → ⋮ → Download diagnostics, and send us the file.",
+        "data": {}
+      },
+      "control_inverter": {
+        "title": "Control — Inverter work mode",
+        "description": "Map control entities (optional). Leave empty if your inverter doesn't have them.",
+        "data": {
+          "work_mode": "Work mode"
+        }
+      },
+      "control_battery": {
+        "title": "Control — Battery control",
+        "description": "Map control entities (optional). Leave empty if your inverter doesn't have them.",
+        "data": {
+          "battery_max_charge_current": "Battery max charge current",
+          "battery_max_discharge_current": "Battery max discharge current"
+        }
+      },
+      "control_grid": {
+        "title": "Control — Grid control",
+        "description": "Map control entities (optional). Leave empty if your inverter doesn't have them.",
+        "data": {
+          "grid_peak_shaving": "Grid peak shaving"
+        }
+      },
+      "control_pv": {
+        "title": "Control — PV control",
+        "description": "Map control entities (optional). Leave empty if your inverter doesn't have them.",
+        "data": {
+          "pv_power_limit": "PV power limit"
+        }
+      },
+      "control_schedule": {
+        "title": "Control — Schedule (TOU)",
+        "description": "Map control entities (optional). Leave empty if your inverter doesn't have them.",
+        "data": {
+          "tou_1_time": "TOU slot 1 — start",
+          "tou_1_soc": "TOU slot 1 — target SOC",
+          "tou_1_charge_mode": "TOU slot 1 — charge mode",
+          "tou_2_time": "TOU slot 2 — start",
+          "tou_2_soc": "TOU slot 2 — target SOC",
+          "tou_2_charge_mode": "TOU slot 2 — charge mode",
+          "tou_3_time": "TOU slot 3 — start",
+          "tou_3_soc": "TOU slot 3 — target SOC",
+          "tou_3_charge_mode": "TOU slot 3 — charge mode",
+          "tou_4_time": "TOU slot 4 — start",
+          "tou_4_soc": "TOU slot 4 — target SOC",
+          "tou_4_charge_mode": "TOU slot 4 — charge mode",
+          "tou_5_time": "TOU slot 5 — start",
+          "tou_5_soc": "TOU slot 5 — target SOC",
+          "tou_5_charge_mode": "TOU slot 5 — charge mode",
+          "tou_6_time": "TOU slot 6 — start",
+          "tou_6_soc": "TOU slot 6 — target SOC",
+          "tou_6_charge_mode": "TOU slot 6 — charge mode"
         }
       }
     },

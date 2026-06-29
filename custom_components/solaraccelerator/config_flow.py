@@ -52,6 +52,7 @@ from .const import (
     CONF_INVERTER_MODEL,
     CONF_EV_MODEL,
     CONF_CONTROLLABLE_DEVICES,
+    CONF_PROFILE_DRAFT,
     CONTROLLABLE_DEVICE_TYPES,
     CONFIG_MODE_SOLARMAN,
     CONFIG_MODE_MANUAL,
@@ -59,10 +60,15 @@ from .const import (
     API_TEST_CONNECTION_ENDPOINT,
     REQUIRED_ENTITIES,
     ENTITY_CATEGORIES,
+    INVERTER_KEYS,
+    EV_ENTITY_KEYS,
 )
+from . import contract
+from .profile_export import build_profile_draft, detect_prefix
 from .profiles import (
     ROLE_EV_CHARGER,
     ROLE_INVERTER,
+    SOURCES,
     get_profile,
     list_profiles,
     list_profiles_for_source,
@@ -546,13 +552,16 @@ class SolarAcceleratorOptionsFlow(config_entries.OptionsFlow):
         self._devices: list[dict[str, Any]] = list(
             config_entry.options.get(CONF_CONTROLLABLE_DEVICES, [])
         )
+        # Szkic profilu (kreator "Zgłoś / eksportuj profil") — wczytaj, by edycja wznawiała.
+        self._profile: dict[str, Any] = dict(config_entry.options.get(CONF_PROFILE_DRAFT, {}))
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Menu: dodaj / usuń. Każda akcja zapisuje od razu (jak config flow) —
-        nie ma osobnego kroku 'Zapisz', więc nic nie ginie po zamknięciu okna."""
+        """Menu: sterowalne odbiorniki + kreator zgłoszenia profilu. Każda akcja zapisuje
+        od razu (jak config flow), więc nic nie ginie po zamknięciu okna."""
         menu_options = ["add_device"]
         if self._devices:
             menu_options.append("remove_device")
+        menu_options.append("export_profile")
 
         return self.async_show_menu(
             step_id="init",
@@ -560,12 +569,21 @@ class SolarAcceleratorOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={"count": str(len(self._devices))},
         )
 
+    def _persist(self) -> FlowResult:
+        """Persystuj WSZYSTKIE opcje (odbiorniki + szkic profilu) i zakończ flow.
+
+        Scalamy, bo ``async_create_entry`` w options flow zastępuje całe ``entry.options`` —
+        bez scalania zapis odbiorników kasowałby szkic profilu i odwrotnie.
+        """
+        data = dict(self._entry.options)
+        data[CONF_CONTROLLABLE_DEVICES] = self._devices
+        if self._profile:
+            data[CONF_PROFILE_DRAFT] = self._profile
+        return self.async_create_entry(title="", data=data)
+
     def _save(self) -> FlowResult:
-        """Persystuj listę do entry.options i zakończ flow (wyzwala reload)."""
-        return self.async_create_entry(
-            title="",
-            data={CONF_CONTROLLABLE_DEVICES: self._devices},
-        )
+        """Alias zgodności — całość zapisu idzie przez ``_persist``."""
+        return self._persist()
 
     async def async_step_add_device(
         self, user_input: dict[str, Any] | None = None
@@ -642,3 +660,145 @@ class SolarAcceleratorOptionsFlow(config_entries.OptionsFlow):
         })
 
         return self.async_show_form(step_id="remove_device", data_schema=schema)
+
+    # === Kreator "Zgłoś / eksportuj profil" ===
+
+    def _read_mapping(self) -> dict[str, str]:
+        """Mapowanie odczytu z konfiguracji, ograniczone do kluczy właściwych dla źródła."""
+        mapping = self._entry.data.get(CONF_ENTITY_MAPPING, {})
+        keys = set(EV_ENTITY_KEYS) if self._profile.get("source") == "ocpp" else set(INVERTER_KEYS)
+        return {k: v for k, v in mapping.items() if k in keys}
+
+    def _draft_preview(self) -> dict[str, Any]:
+        """Zbuduj podgląd szkicu profilu z bieżącego stanu kreatora."""
+        return build_profile_draft(
+            manufacturer=self._profile.get("manufacturer", ""),
+            model=self._profile.get("model", ""),
+            source=self._profile.get("source", ""),
+            prefix=self._profile.get("prefix", ""),
+            read_mapping=self._read_mapping(),
+            control_mapping=self._profile.get("control_mapping", {}),
+            capabilities=self._profile.get("capabilities", {}),
+        )
+
+    async def async_step_export_profile(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Krok 1 kreatora: metadane urządzenia (producent, model, źródło, prefiks)."""
+        mapping = self._entry.data.get(CONF_ENTITY_MAPPING, {})
+
+        if user_input is not None:
+            self._profile["manufacturer"] = (user_input.get("manufacturer") or "").strip()
+            self._profile["model"] = (user_input.get("model") or "").strip()
+            self._profile["source"] = (user_input.get("source") or "").strip().lower()
+            self._profile["prefix"] = (user_input.get("prefix") or "").strip().lower()
+            return await self.async_step_profile_capabilities()
+
+        selected = get_profile(self._entry.data.get(CONF_CONFIG_MODE, ""))
+        default_source = self._profile.get("source") or (selected.source if selected else CONFIG_MODE_SOLARMAN)
+        default_prefix = (
+            self._profile.get("prefix")
+            or self._entry.data.get(CONF_SOLARMAN_PREFIX)
+            or detect_prefix(list(mapping.values()))
+        )
+        source_options = [{"value": slug, "label": label} for slug, label in SOURCES.items()]
+
+        schema = vol.Schema({
+            vol.Required("manufacturer", default=self._profile.get("manufacturer", "")): TextSelector(
+                TextSelectorConfig(type=TextSelectorType.TEXT)
+            ),
+            vol.Required("model", default=self._profile.get("model", "")): TextSelector(
+                TextSelectorConfig(type=TextSelectorType.TEXT)
+            ),
+            vol.Required("source", default=default_source): SelectSelector(
+                SelectSelectorConfig(options=source_options, custom_value=True, mode=SelectSelectorMode.DROPDOWN)
+            ),
+            vol.Required("prefix", default=default_prefix): TextSelector(
+                TextSelectorConfig(type=TextSelectorType.TEXT)
+            ),
+        })
+
+        return self.async_show_form(step_id="export_profile", data_schema=schema)
+
+    async def async_step_profile_capabilities(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Krok 2: capabilities (pole działania) — co falownik potrafi."""
+        current = self._profile.get("capabilities", {})
+
+        if user_input is not None:
+            self._profile["capabilities"] = {
+                key: bool(user_input.get(key, False)) for key, _label in contract.CAPABILITIES
+            }
+            return await self.async_step_control_inverter()
+
+        schema = vol.Schema({
+            vol.Required(key, default=bool(current.get(key, False))): bool
+            for key, _label in contract.CAPABILITIES
+        })
+
+        return self.async_show_form(step_id="profile_capabilities", data_schema=schema)
+
+    async def _async_step_control(
+        self, category: str, next_step: str, user_input: dict[str, Any] | None
+    ) -> FlowResult:
+        """Wspólna obsługa kroków mapowania encji sterujących (wszystkie pola opcjonalne)."""
+        controls = contract.controls_for_category(category)
+        current: dict[str, str] = dict(self._profile.get("control_mapping", {}))
+
+        if user_input is not None:
+            for key, _label, _vt, _cat in controls:
+                value = user_input.get(key)
+                if value:
+                    current[key] = value
+                else:
+                    current.pop(key, None)
+            self._profile["control_mapping"] = current
+            return await getattr(self, f"async_step_{next_step}")()
+
+        schema_dict: dict[Any, Any] = {}
+        for key, _label, _vt, _cat in controls:
+            default = current.get(key, vol.UNDEFINED)
+            schema_dict[vol.Optional(key, default=default)] = EntitySelector(
+                EntitySelectorConfig(domain=contract.control_entity_domains(key))
+            )
+
+        return self.async_show_form(
+            step_id=f"control_{category}",
+            data_schema=vol.Schema(schema_dict),
+            description_placeholders={"category_name": contract.CONTROL_CATEGORIES.get(category, category)},
+        )
+
+    async def async_step_control_inverter(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        return await self._async_step_control("inverter", "control_battery", user_input)
+
+    async def async_step_control_battery(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        return await self._async_step_control("battery", "control_grid", user_input)
+
+    async def async_step_control_grid(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        return await self._async_step_control("grid", "control_pv", user_input)
+
+    async def async_step_control_pv(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        return await self._async_step_control("pv", "control_schedule", user_input)
+
+    async def async_step_control_schedule(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        return await self._async_step_control("schedule", "profile_summary", user_input)
+
+    async def async_step_profile_summary(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Krok końcowy: podsumowanie i zapis szkicu. Eksport przez 'Pobierz diagnostykę'."""
+        if user_input is not None:
+            return self._persist()
+
+        draft = self._draft_preview()
+        return self.async_show_form(
+            step_id="profile_summary",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "file_path": draft["file_path"],
+                "read_count": str(len(draft["read_template"])),
+                "control_count": str(len(draft["control_template"])),
+                "literal_count": str(len(draft["literal_entities"])),
+            },
+        )

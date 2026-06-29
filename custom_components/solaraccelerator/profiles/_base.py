@@ -53,6 +53,12 @@ class Profile:
     label: str
     role: str
     read_template: dict[str, str] = field(default_factory=dict)
+    # Szablon encji sterujących: ``klucz_sterujący → "domain.{prefix}_suffix"`` (jak read_template).
+    control_template: dict[str, str] = field(default_factory=dict)
+    # Capabilities (pole działania): ``klucz → bool`` (patrz contract.CAPABILITIES).
+    capabilities: dict[str, bool] = field(default_factory=dict)
+    # Hinty normalizacji wartości per klucz odczytu (znak, licznik dzienny/życiowy, skala).
+    normalization: dict[str, object] = field(default_factory=dict)
     prefix_example: str = ""
     aliases: tuple[str, ...] = ()
     id: str = field(init=False)
@@ -70,3 +76,7 @@ class Profile:
         ręcznie skorygować pojedyncze wpisy, jeśli któryś identyfikator nie pasuje.
         """
         return {key: tmpl.format(prefix=prefix) for key, tmpl in self.read_template.items()}
+
+    def build_control_mapping(self, prefix: str) -> dict[str, str]:
+        """Zbuduj mapowanie ``klucz_sterujący → entity_id`` dla podanego prefiksu."""
+        return {key: tmpl.format(prefix=prefix) for key, tmpl in self.control_template.items()}
