@@ -13,18 +13,18 @@
           "server_url": "Domyślnie: https://solaraccelerator.cloud"
         }
       },
-      "choose_source": {
-        "title": "Falownik - źródło danych",
-        "description": "Wybierz, skąd Twój falownik jest wystawiony w Home Assistant (typ integracji), albo wybierz ręczne mapowanie encji.\n\n**Solarman / SolarAssistant** - automatyczne mapowanie; w kolejnym kroku wybierzesz producenta i model.\n\n**Ręczne mapowanie** - ręczny wybór każdej encji z Home Assistant.",
+      "choose_inverter": {
+        "title": "Falownik - wybór modelu",
+        "description": "Wybierz swój falownik. Na razie wspierane są tylko poniższe modele — inne wymagają wsparcia w kodzie. Nie ma Twojego? Napisz do nas.\n\nW kolejnym kroku wskażesz, jak Twój falownik jest wystawiony w Home Assistant (źródło).",
         "data": {
-          "source": "Dostawca / typ"
+          "inverter": "Falownik"
         }
       },
-      "choose_model": {
-        "title": "Falownik - producent i model",
-        "description": "Źródło: {source_label}\n\nWybierz producenta i model falownika.",
+      "choose_source": {
+        "title": "Falownik - źródło danych",
+        "description": "Jak {inverter} jest wystawiony w Home Assistant?\n\n**Solarman / SolarAssistant** - gotowe automatyczne mapowanie.\n\n**Ręczne mapowanie** - dla źródła, którego nie ma jeszcze na liście; po skonfigurowaniu możesz je zgłosić do dodania.",
         "data": {
-          "model": "Producent i model"
+          "source": "Źródło / sposób"
         }
       },
       "prefix": {
@@ -323,6 +323,9 @@
           "model": "Model",
           "source": "Źródło / typ integracji",
           "prefix": "Prefiks encji"
+        },
+        "data_description": {
+          "source": "np. givtcp, huawei_solar — wpisz nazwę nowego źródła integracji"
         }
       },
       "profile_capabilities": {

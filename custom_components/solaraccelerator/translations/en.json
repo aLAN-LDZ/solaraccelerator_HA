@@ -13,18 +13,18 @@
           "server_url": "Default: https://solaraccelerator.cloud"
         }
       },
-      "choose_source": {
-        "title": "Inverter - Data Source",
-        "description": "Select how your inverter is exposed in Home Assistant (integration type), or choose manual entity mapping.\n\n**Solarman / SolarAssistant** - automatic mapping; you'll pick the manufacturer and model in the next step.\n\n**Manual** - manually select each entity from Home Assistant.",
+      "choose_inverter": {
+        "title": "Inverter - Model Selection",
+        "description": "Select your inverter. Only the models below are supported for now — others require code support. Yours not listed? Let us know.\n\nIn the next step you'll pick how your inverter is exposed in Home Assistant (the source).",
         "data": {
-          "source": "Provider / type"
+          "inverter": "Inverter"
         }
       },
-      "choose_model": {
-        "title": "Inverter - Manufacturer & Model",
-        "description": "Source: {source_label}\n\nSelect the inverter manufacturer and model.",
+      "choose_source": {
+        "title": "Inverter - Data Source",
+        "description": "How is {inverter} exposed in Home Assistant?\n\n**Solarman / SolarAssistant** - ready-made automatic mapping.\n\n**Manual mapping** - for a source not on the list yet; once configured you can submit it to be added.",
         "data": {
-          "model": "Manufacturer & model"
+          "source": "Source / method"
         }
       },
       "prefix": {
@@ -323,6 +323,9 @@
           "model": "Model",
           "source": "Source / integration type",
           "prefix": "Entity prefix"
+        },
+        "data_description": {
+          "source": "e.g. givtcp, huawei_solar — type the new integration source name"
         }
       },
       "profile_capabilities": {

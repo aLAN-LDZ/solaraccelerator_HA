@@ -64,15 +64,39 @@ def list_profiles(role: str) -> list[Profile]:
 def list_sources(role: str) -> list[tuple[str, str]]:
     """Zwróć źródła mające ≥1 profil danej roli jako ``[(slug, label), ...]``.
 
-    Kolejność wg ``SOURCES``. Używane do pierwszego kroku kreatora (wybór TYPU).
+    Kolejność wg ``SOURCES``.
     """
     present = {p.source for p in list_profiles(role)}
     return [(slug, label) for slug, label in SOURCES.items() if slug in present]
 
 
 def list_profiles_for_source(role: str, source: str) -> list[Profile]:
-    """Zwróć profile danej roli należące do wskazanego źródła (do dropdownu modelu)."""
+    """Zwróć profile danej roli należące do wskazanego źródła."""
     return [p for p in PROFILES if p.role == role and p.source == source]
+
+
+def list_supported_inverters() -> list[tuple[str, str]]:
+    """Zwróć wspierane falowniki jako ``[(producent, model), ...]`` (bez duplikatów).
+
+    „Wspierany" = istnieje dla niego profil (rodzina obsługiwana w kodzie). Różne
+    źródła tego samego falownika to dalej jeden wspierany model. To pierwszy krok
+    kreatora: użytkownik wybiera swój falownik, potem dopiero źródło.
+    """
+    seen: list[tuple[str, str]] = []
+    for profile in list_profiles(ROLE_INVERTER):
+        key = (profile.manufacturer, profile.model)
+        if key not in seen:
+            seen.append(key)
+    return seen
+
+
+def list_sources_for_inverter(manufacturer: str, model: str) -> list[tuple[str, str, str]]:
+    """Zwróć źródła dostępne dla danego falownika jako ``[(slug, label, profile_id), ...]``."""
+    out: list[tuple[str, str, str]] = []
+    for profile in list_profiles(ROLE_INVERTER):
+        if profile.manufacturer == manufacturer and profile.model == model:
+            out.append((profile.source, SOURCES.get(profile.source, profile.source), profile.id))
+    return out
 
 
 __all__ = [
@@ -86,4 +110,6 @@ __all__ = [
     "list_profiles",
     "list_sources",
     "list_profiles_for_source",
+    "list_supported_inverters",
+    "list_sources_for_inverter",
 ]

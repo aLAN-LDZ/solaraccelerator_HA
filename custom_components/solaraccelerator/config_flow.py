@@ -49,6 +49,7 @@ from .const import (
     CONF_EV_ENABLED,
     CONF_EV_PREFIX,
     CONF_EV_CONFIG_MODE,
+    CONF_INVERTER_MANUFACTURER,
     CONF_INVERTER_MODEL,
     CONF_EV_MODEL,
     CONF_CONTROLLABLE_DEVICES,
@@ -67,17 +68,15 @@ from . import contract
 from .profile_export import build_profile_draft, detect_prefix
 from .profiles import (
     ROLE_EV_CHARGER,
-    ROLE_INVERTER,
-    SOURCES,
     get_profile,
     list_profiles,
-    list_profiles_for_source,
-    list_sources,
+    list_sources_for_inverter,
+    list_supported_inverters,
 )
 
-# Nazwy pól formularza kreatora (wybór źródła i modelu).
+# Nazwy pól formularza kreatora (wybór wspieranego falownika i źródła).
+CONF_INVERTER = "inverter"
 CONF_SOURCE = "source"
-CONF_MODEL = "model"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -163,9 +162,9 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Zainicjalizuj puste pola — zostaną wypełnione w kolejnych krokach kreatora."""
         self.api_key: str = ""
         self.server_url: str = DEFAULT_SERVER_URL
-        self.config_source: str = ""
         self.config_mode: str = ""
         self.solarman_prefix: str = ""
+        self.inverter_manufacturer: str = ""
         self.inverter_model: str = ""
         self.ev_enabled: bool = False
         self.ev_config_mode: str = ""
@@ -200,7 +199,7 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if result["success"]:
                     self.api_key = api_key
                     self.server_url = server_url.rstrip("/")
-                    return await self.async_step_choose_source()
+                    return await self.async_step_choose_inverter()
                 else:
                     errors["base"] = result.get("error", "cannot_connect")
 
@@ -219,30 +218,66 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_choose_inverter(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Krok 1: wybór wspieranego falownika.
+
+        Wsparcie jest na poziomie falownika (podejście do sterowania w kodzie), nie
+        samego mapowania encji. Inny falownik = inne podejście — dlatego najpierw
+        użytkownik wybiera swój wspierany model, a dopiero potem źródło.
+        """
+        if user_input is not None:
+            manufacturer, model = user_input[CONF_INVERTER].split("|", 1)
+            self.inverter_manufacturer = manufacturer
+            self.inverter_model = model
+            return await self.async_step_choose_source()
+
+        inverter_options = [
+            {"value": f"{manufacturer}|{model}", "label": f"{manufacturer} {model}"}
+            for manufacturer, model in list_supported_inverters()
+        ]
+
+        schema = vol.Schema({
+            vol.Required(CONF_INVERTER, default=inverter_options[0]["value"]): SelectSelector(
+                SelectSelectorConfig(
+                    options=inverter_options,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            ),
+        })
+
+        return self.async_show_form(
+            step_id="choose_inverter",
+            data_schema=schema,
+        )
+
     async def async_step_choose_source(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Krok 1: wybór źródła encji falownika (TYP) albo trybu ręcznego.
+        """Krok 2: jak wybrany falownik jest wystawiony w HA (źródło) albo ręczne mapowanie.
 
-        Źródła pochodzą z folderów profili (Solarman, SolarAssistant, …). Po wyborze
-        konkretnego źródła przechodzimy do wyboru producenta i modelu; tryb ręczny
-        idzie od razu do mapowania encji.
+        Oficjalne źródła to gotowe profile dla tego falownika. „Ręczne mapowanie"
+        służy do skonfigurowania tego samego (wspieranego) falownika wystawionego
+        przez źródło, którego nie mamy jeszcze oficjalnie — i do zgłoszenia go.
         """
+        sources = list_sources_for_inverter(self.inverter_manufacturer, self.inverter_model)
+
         if user_input is not None:
-            self.config_source = user_input.get(CONF_SOURCE, CONFIG_MODE_MANUAL)
-
-            if self.config_source == CONFIG_MODE_MANUAL:
+            choice = user_input[CONF_SOURCE]
+            if choice == CONFIG_MODE_MANUAL:
                 self.config_mode = CONFIG_MODE_MANUAL
-                self.inverter_model = _model_label(None)
                 return await self.async_step_entities_pv()
-            return await self.async_step_choose_model()
+            # Wartość to id profilu (źródło×falownik).
+            self.config_mode = choice
+            return await self.async_step_prefix()
 
-        # Lista źródeł mających profil falownika + tryb ręczny.
         source_options = [
-            {"value": slug, "label": label}
-            for slug, label in list_sources(ROLE_INVERTER)
+            {"value": profile_id, "label": label} for _slug, label, profile_id in sources
         ]
-        source_options.append({"value": CONFIG_MODE_MANUAL, "label": "Ręczne mapowanie encji"})
+        source_options.append(
+            {"value": CONFIG_MODE_MANUAL, "label": "Ręczne mapowanie (źródło spoza listy)"}
+        )
 
         schema = vol.Schema({
             vol.Required(CONF_SOURCE, default=source_options[0]["value"]): SelectSelector(
@@ -256,41 +291,8 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="choose_source",
             data_schema=schema,
-        )
-
-    async def async_step_choose_model(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Krok 2: wybór producenta i modelu w obrębie wybranego źródła.
-
-        Wybrany profil ustala ``config_mode`` (jego id) oraz model zapisywany
-        informacyjnie. Następnie pobieramy prefix encji.
-        """
-        profiles = list_profiles_for_source(ROLE_INVERTER, self.config_source)
-
-        if user_input is not None:
-            self.config_mode = user_input.get(CONF_MODEL, "")
-            self.inverter_model = _model_label(get_profile(self.config_mode))
-            return await self.async_step_prefix()
-
-        model_options = [
-            {"value": p.id, "label": f"{p.manufacturer} {p.model}"} for p in profiles
-        ]
-
-        schema = vol.Schema({
-            vol.Required(CONF_MODEL, default=model_options[0]["value"]): SelectSelector(
-                SelectSelectorConfig(
-                    options=model_options,
-                    mode=SelectSelectorMode.DROPDOWN,
-                )
-            ),
-        })
-
-        return self.async_show_form(
-            step_id="choose_model",
-            data_schema=schema,
             description_placeholders={
-                "source_label": dict(list_sources(ROLE_INVERTER)).get(self.config_source, self.config_source),
+                "inverter": f"{self.inverter_manufacturer} {self.inverter_model}",
             },
         )
 
@@ -524,6 +526,7 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_SERVER_URL: self.server_url,
                 CONF_CONFIG_MODE: self.config_mode,
                 CONF_SOLARMAN_PREFIX: self.solarman_prefix,
+                CONF_INVERTER_MANUFACTURER: self.inverter_manufacturer,
                 CONF_INVERTER_MODEL: self.inverter_model,
                 CONF_EV_ENABLED: self.ev_enabled,
                 CONF_EV_CONFIG_MODE: self.ev_config_mode,
@@ -690,28 +693,38 @@ class SolarAcceleratorOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             self._profile["manufacturer"] = (user_input.get("manufacturer") or "").strip()
             self._profile["model"] = (user_input.get("model") or "").strip()
-            self._profile["source"] = (user_input.get("source") or "").strip().lower()
+            # Źródło to nowy slug podany przez użytkownika — czyścimy go do bezpiecznej postaci.
+            self._profile["source"] = slugify(user_input.get("source") or "")
             self._profile["prefix"] = (user_input.get("prefix") or "").strip().lower()
             return await self.async_step_profile_capabilities()
 
         selected = get_profile(self._entry.data.get(CONF_CONFIG_MODE, ""))
-        default_source = self._profile.get("source") or (selected.source if selected else CONFIG_MODE_SOLARMAN)
+        default_source = self._profile.get("source") or (selected.source if selected else "")
+        default_manufacturer = (
+            self._profile.get("manufacturer")
+            or self._entry.data.get(CONF_INVERTER_MANUFACTURER)
+            or (selected.manufacturer if selected else "")
+        )
+        default_model = (
+            self._profile.get("model")
+            or self._entry.data.get(CONF_INVERTER_MODEL)
+            or (selected.model if selected else "")
+        )
         default_prefix = (
             self._profile.get("prefix")
             or self._entry.data.get(CONF_SOLARMAN_PREFIX)
             or detect_prefix(list(mapping.values()))
         )
-        source_options = [{"value": slug, "label": label} for slug, label in SOURCES.items()]
 
         schema = vol.Schema({
-            vol.Required("manufacturer", default=self._profile.get("manufacturer", "")): TextSelector(
+            vol.Required("manufacturer", default=default_manufacturer): TextSelector(
                 TextSelectorConfig(type=TextSelectorType.TEXT)
             ),
-            vol.Required("model", default=self._profile.get("model", "")): TextSelector(
+            vol.Required("model", default=default_model): TextSelector(
                 TextSelectorConfig(type=TextSelectorType.TEXT)
             ),
-            vol.Required("source", default=default_source): SelectSelector(
-                SelectSelectorConfig(options=source_options, custom_value=True, mode=SelectSelectorMode.DROPDOWN)
+            vol.Required("source", default=default_source): TextSelector(
+                TextSelectorConfig(type=TextSelectorType.TEXT)
             ),
             vol.Required("prefix", default=default_prefix): TextSelector(
                 TextSelectorConfig(type=TextSelectorType.TEXT)
