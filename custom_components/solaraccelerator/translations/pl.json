@@ -13,11 +13,18 @@
           "server_url": "Domyślnie: https://solaraccelerator.cloud"
         }
       },
-      "choose_mode": {
-        "title": "Falownik - konfiguracja",
-        "description": "Wybierz falownik i sposób mapowania encji. Model jest częścią wybranego profilu.\n\n**Profil (prefix)** - automatyczne mapowanie dla wybranego urządzenia. Wystarczy podać prefix encji.\n\n**Ręczne** - ręczny wybór każdej encji z Home Assistant.",
+      "choose_source": {
+        "title": "Falownik - źródło danych",
+        "description": "Wybierz, skąd Twój falownik jest wystawiony w Home Assistant (typ integracji), albo wybierz ręczne mapowanie encji.\n\n**Solarman / SolarAssistant** - automatyczne mapowanie; w kolejnym kroku wybierzesz producenta i model.\n\n**Ręczne mapowanie** - ręczny wybór każdej encji z Home Assistant.",
         "data": {
-          "config_mode": "Falownik / tryb"
+          "source": "Dostawca / typ"
+        }
+      },
+      "choose_model": {
+        "title": "Falownik - producent i model",
+        "description": "Źródło: {source_label}\n\nWybierz producenta i model falownika.",
+        "data": {
+          "model": "Producent i model"
         }
       },
       "prefix": {

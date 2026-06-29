@@ -13,11 +13,18 @@
           "server_url": "Default: https://solaraccelerator.cloud"
         }
       },
-      "choose_mode": {
-        "title": "Inverter - Configuration",
-        "description": "Select your inverter and how to map entities. The model is part of the chosen profile.\n\n**Profile (prefix)** - automatic mapping for the selected device. Just provide the entity prefix.\n\n**Manual** - manually select each entity from Home Assistant.",
+      "choose_source": {
+        "title": "Inverter - Data Source",
+        "description": "Select how your inverter is exposed in Home Assistant (integration type), or choose manual entity mapping.\n\n**Solarman / SolarAssistant** - automatic mapping; you'll pick the manufacturer and model in the next step.\n\n**Manual** - manually select each entity from Home Assistant.",
         "data": {
-          "config_mode": "Inverter / mode"
+          "source": "Provider / type"
+        }
+      },
+      "choose_model": {
+        "title": "Inverter - Manufacturer & Model",
+        "description": "Source: {source_label}\n\nSelect the inverter manufacturer and model.",
+        "data": {
+          "model": "Manufacturer & model"
         }
       },
       "prefix": {

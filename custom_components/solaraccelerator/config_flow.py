@@ -65,7 +65,13 @@ from .profiles import (
     ROLE_INVERTER,
     get_profile,
     list_profiles,
+    list_profiles_for_source,
+    list_sources,
 )
+
+# Nazwy pól formularza kreatora (wybór źródła i modelu).
+CONF_SOURCE = "source"
+CONF_MODEL = "model"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -151,6 +157,7 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Zainicjalizuj puste pola — zostaną wypełnione w kolejnych krokach kreatora."""
         self.api_key: str = ""
         self.server_url: str = DEFAULT_SERVER_URL
+        self.config_source: str = ""
         self.config_mode: str = ""
         self.solarman_prefix: str = ""
         self.inverter_model: str = ""
@@ -187,7 +194,7 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if result["success"]:
                     self.api_key = api_key
                     self.server_url = server_url.rstrip("/")
-                    return await self.async_step_choose_mode()
+                    return await self.async_step_choose_source()
                 else:
                     errors["base"] = result.get("error", "cannot_connect")
 
@@ -206,41 +213,79 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_choose_mode(
+    async def async_step_choose_source(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Wybór profilu falownika (producent+model+źródło) albo trybu ręcznego.
+        """Krok 1: wybór źródła encji falownika (TYP) albo trybu ręcznego.
 
-        Model falownika jest częścią profilu, więc nie ma osobnego pola modelu —
-        wybranie profilu ustala zarazem model (zapisywany informacyjnie).
+        Źródła pochodzą z folderów profili (Solarman, SolarAssistant, …). Po wyborze
+        konkretnego źródła przechodzimy do wyboru producenta i modelu; tryb ręczny
+        idzie od razu do mapowania encji.
         """
         if user_input is not None:
-            self.config_mode = user_input.get(CONF_CONFIG_MODE, CONFIG_MODE_MANUAL)
-            self.inverter_model = _model_label(get_profile(self.config_mode))
+            self.config_source = user_input.get(CONF_SOURCE, CONFIG_MODE_MANUAL)
 
-            if self.config_mode == CONFIG_MODE_MANUAL:
+            if self.config_source == CONFIG_MODE_MANUAL:
+                self.config_mode = CONFIG_MODE_MANUAL
+                self.inverter_model = _model_label(None)
                 return await self.async_step_entities_pv()
-            return await self.async_step_prefix()
+            return await self.async_step_choose_model()
 
-        # Lista wyboru: po jednym profilu falownika z rejestru + tryb ręczny.
-        mode_options = [
-            {"value": p.id, "label": p.label} for p in list_profiles(ROLE_INVERTER)
+        # Lista źródeł mających profil falownika + tryb ręczny.
+        source_options = [
+            {"value": slug, "label": label}
+            for slug, label in list_sources(ROLE_INVERTER)
         ]
-        mode_options.append({"value": CONFIG_MODE_MANUAL, "label": "Ręczne mapowanie encji"})
-        default_mode = mode_options[0]["value"]
+        source_options.append({"value": CONFIG_MODE_MANUAL, "label": "Ręczne mapowanie encji"})
 
         schema = vol.Schema({
-            vol.Required(CONF_CONFIG_MODE, default=default_mode): SelectSelector(
+            vol.Required(CONF_SOURCE, default=source_options[0]["value"]): SelectSelector(
                 SelectSelectorConfig(
-                    options=mode_options,
+                    options=source_options,
                     mode=SelectSelectorMode.LIST,
                 )
             ),
         })
 
         return self.async_show_form(
-            step_id="choose_mode",
+            step_id="choose_source",
             data_schema=schema,
+        )
+
+    async def async_step_choose_model(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Krok 2: wybór producenta i modelu w obrębie wybranego źródła.
+
+        Wybrany profil ustala ``config_mode`` (jego id) oraz model zapisywany
+        informacyjnie. Następnie pobieramy prefix encji.
+        """
+        profiles = list_profiles_for_source(ROLE_INVERTER, self.config_source)
+
+        if user_input is not None:
+            self.config_mode = user_input.get(CONF_MODEL, "")
+            self.inverter_model = _model_label(get_profile(self.config_mode))
+            return await self.async_step_prefix()
+
+        model_options = [
+            {"value": p.id, "label": f"{p.manufacturer} {p.model}"} for p in profiles
+        ]
+
+        schema = vol.Schema({
+            vol.Required(CONF_MODEL, default=model_options[0]["value"]): SelectSelector(
+                SelectSelectorConfig(
+                    options=model_options,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            ),
+        })
+
+        return self.async_show_form(
+            step_id="choose_model",
+            data_schema=schema,
+            description_placeholders={
+                "source_label": dict(list_sources(ROLE_INVERTER)).get(self.config_source, self.config_source),
+            },
         )
 
     async def async_step_prefix(
