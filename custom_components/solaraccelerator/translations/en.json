@@ -317,25 +317,28 @@
       },
       "export_profile": {
         "title": "Report / export profile — device",
-        "description": "Enter the manufacturer, model and integration source. This builds a profile you can send us to add official support.",
+        "description": "Enter your device details. We'll build a profile from them that you send us to add official support for your source.",
         "data": {
           "manufacturer": "Manufacturer",
           "model": "Model",
-          "source": "Source / integration type",
+          "source": "Source / integration name",
           "prefix": "Entity prefix"
         },
         "data_description": {
-          "source": "e.g. givtcp, huawei_solar — type the new integration source name"
+          "manufacturer": "Inverter manufacturer, e.g. Deye.",
+          "model": "Inverter model, e.g. SUN-12K-SG04LP3.",
+          "source": "e.g. givtcp, huawei_solar — type the new integration source name.",
+          "prefix": "Common beginning of your HA entity names — replaced by the prefix variable in the profile."
         }
       },
       "profile_capabilities": {
-        "title": "Capabilities — what the inverter can do",
-        "description": "Tick the functions your inverter supports. The optimizer won't pick actions outside this list.",
+        "title": "Inverter capabilities",
+        "description": "Tick the functions your inverter actually supports. This limits which control actions will be available for it.",
         "data": {
-          "grid_charge": "Charge battery from grid",
-          "export": "Export energy to grid",
-          "soc_control": "Target battery SOC control",
-          "mixed_charging": "Simultaneous PV + grid charging"
+          "grid_charge": "Inverter can charge the battery from the grid",
+          "export": "Inverter can export energy to the grid",
+          "soc_control": "Inverter allows setting target battery SOC",
+          "mixed_charging": "Inverter can charge from PV and grid at the same time"
         }
       },
       "profile_summary": {
@@ -344,56 +347,89 @@
         "data": {}
       },
       "control_inverter": {
-        "title": "Control — Inverter work mode",
-        "description": "Map control entities (optional). Leave empty if your inverter doesn't have them.",
+        "title": "Inverter work mode",
+        "description": "Map the entities used to control the inverter (optional). The list shows only entities of the matching type. Leave empty if your inverter doesn't have a given function.",
         "data": {
-          "work_mode": "Work mode"
+          "work_mode": "Inverter work mode (select)"
+        },
+        "data_description": {
+          "work_mode": "A select entity with the inverter work mode (e.g. Selling First / Zero Export to Load)."
         }
       },
       "control_battery": {
-        "title": "Control — Battery control",
-        "description": "Map control entities (optional). Leave empty if your inverter doesn't have them.",
+        "title": "Battery control",
+        "description": "Map the entities used to control the inverter (optional). The list shows only entities of the matching type. Leave empty if your inverter doesn't have a given function.",
         "data": {
-          "battery_max_charge_current": "Battery max charge current",
-          "battery_max_discharge_current": "Battery max discharge current"
+          "battery_max_charge_current": "Max battery charge current [A] (number)",
+          "battery_max_discharge_current": "Max battery discharge current [A] (number)"
+        },
+        "data_description": {
+          "battery_max_charge_current": "A number entity setting the battery charge current limit in amperes.",
+          "battery_max_discharge_current": "A number entity setting the battery discharge current limit in amperes."
         }
       },
       "control_grid": {
-        "title": "Control — Grid control",
-        "description": "Map control entities (optional). Leave empty if your inverter doesn't have them.",
+        "title": "Grid control",
+        "description": "Map the entities used to control the inverter (optional). The list shows only entities of the matching type. Leave empty if your inverter doesn't have a given function.",
         "data": {
-          "grid_peak_shaving": "Grid peak shaving"
+          "grid_peak_shaving": "Grid peak shaving — on/off toggle (switch)"
+        },
+        "data_description": {
+          "grid_peak_shaving": "A switch entity that turns grid peak shaving on/off. This is an on/off toggle, NOT a power value."
         }
       },
       "control_pv": {
-        "title": "Control — PV control",
-        "description": "Map control entities (optional). Leave empty if your inverter doesn't have them.",
+        "title": "PV control",
+        "description": "Map the entities used to control the inverter (optional). The list shows only entities of the matching type. Leave empty if your inverter doesn't have a given function.",
         "data": {
-          "pv_power_limit": "PV power limit"
+          "pv_power_limit": "PV power limit [W] (number)"
+        },
+        "data_description": {
+          "pv_power_limit": "A number entity limiting PV power in watts."
         }
       },
       "control_schedule": {
-        "title": "Control — Schedule (TOU)",
-        "description": "Map control entities (optional). Leave empty if your inverter doesn't have them.",
+        "title": "Schedule (TOU)",
+        "description": "Map the entities used to control the inverter (optional). The list shows only entities of the matching type. Leave empty if your inverter doesn't have a given function.",
         "data": {
-          "tou_1_time": "TOU slot 1 — start",
-          "tou_1_soc": "TOU slot 1 — target SOC",
-          "tou_1_charge_mode": "TOU slot 1 — charge mode",
-          "tou_2_time": "TOU slot 2 — start",
-          "tou_2_soc": "TOU slot 2 — target SOC",
-          "tou_2_charge_mode": "TOU slot 2 — charge mode",
-          "tou_3_time": "TOU slot 3 — start",
-          "tou_3_soc": "TOU slot 3 — target SOC",
-          "tou_3_charge_mode": "TOU slot 3 — charge mode",
-          "tou_4_time": "TOU slot 4 — start",
-          "tou_4_soc": "TOU slot 4 — target SOC",
-          "tou_4_charge_mode": "TOU slot 4 — charge mode",
-          "tou_5_time": "TOU slot 5 — start",
-          "tou_5_soc": "TOU slot 5 — target SOC",
-          "tou_5_charge_mode": "TOU slot 5 — charge mode",
-          "tou_6_time": "TOU slot 6 — start",
-          "tou_6_soc": "TOU slot 6 — target SOC",
-          "tou_6_charge_mode": "TOU slot 6 — charge mode"
+          "tou_1_time": "Slot 1: start time (time)",
+          "tou_1_soc": "Slot 1: target SOC [%] (number)",
+          "tou_1_charge_mode": "Slot 1: charge mode (select)",
+          "tou_2_time": "Slot 2: start time (time)",
+          "tou_2_soc": "Slot 2: target SOC [%] (number)",
+          "tou_2_charge_mode": "Slot 2: charge mode (select)",
+          "tou_3_time": "Slot 3: start time (time)",
+          "tou_3_soc": "Slot 3: target SOC [%] (number)",
+          "tou_3_charge_mode": "Slot 3: charge mode (select)",
+          "tou_4_time": "Slot 4: start time (time)",
+          "tou_4_soc": "Slot 4: target SOC [%] (number)",
+          "tou_4_charge_mode": "Slot 4: charge mode (select)",
+          "tou_5_time": "Slot 5: start time (time)",
+          "tou_5_soc": "Slot 5: target SOC [%] (number)",
+          "tou_5_charge_mode": "Slot 5: charge mode (select)",
+          "tou_6_time": "Slot 6: start time (time)",
+          "tou_6_soc": "Slot 6: target SOC [%] (number)",
+          "tou_6_charge_mode": "Slot 6: charge mode (select)"
+        },
+        "data_description": {
+          "tou_1_time": "A time entity — start time of schedule slot 1.",
+          "tou_1_soc": "A number entity — target battery SOC in slot 1 (percent).",
+          "tou_1_charge_mode": "A select entity — charge source in slot 1 (e.g. Grid / Generator / Off).",
+          "tou_2_time": "A time entity — start time of schedule slot 2.",
+          "tou_2_soc": "A number entity — target battery SOC in slot 2 (percent).",
+          "tou_2_charge_mode": "A select entity — charge source in slot 2 (e.g. Grid / Generator / Off).",
+          "tou_3_time": "A time entity — start time of schedule slot 3.",
+          "tou_3_soc": "A number entity — target battery SOC in slot 3 (percent).",
+          "tou_3_charge_mode": "A select entity — charge source in slot 3 (e.g. Grid / Generator / Off).",
+          "tou_4_time": "A time entity — start time of schedule slot 4.",
+          "tou_4_soc": "A number entity — target battery SOC in slot 4 (percent).",
+          "tou_4_charge_mode": "A select entity — charge source in slot 4 (e.g. Grid / Generator / Off).",
+          "tou_5_time": "A time entity — start time of schedule slot 5.",
+          "tou_5_soc": "A number entity — target battery SOC in slot 5 (percent).",
+          "tou_5_charge_mode": "A select entity — charge source in slot 5 (e.g. Grid / Generator / Off).",
+          "tou_6_time": "A time entity — start time of schedule slot 6.",
+          "tou_6_soc": "A number entity — target battery SOC in slot 6 (percent).",
+          "tou_6_charge_mode": "A select entity — charge source in slot 6 (e.g. Grid / Generator / Off)."
         }
       }
     },

@@ -317,25 +317,28 @@
       },
       "export_profile": {
         "title": "Zgłoś / eksportuj profil — urządzenie",
-        "description": "Podaj producenta, model i źródło integracji. Te dane zbudują profil, który prześlesz do dodania oficjalnego wsparcia.",
+        "description": "Podaj dane swojego urządzenia. Zbudujemy z nich profil, który prześlesz nam do dodania oficjalnego wsparcia dla Twojego źródła.",
         "data": {
           "manufacturer": "Producent",
           "model": "Model",
-          "source": "Źródło / typ integracji",
+          "source": "Nazwa źródła / integracji",
           "prefix": "Prefiks encji"
         },
         "data_description": {
-          "source": "np. givtcp, huawei_solar — wpisz nazwę nowego źródła integracji"
+          "manufacturer": "Producent falownika, np. Deye.",
+          "model": "Model falownika, np. SUN-12K-SG04LP3.",
+          "source": "np. givtcp, huawei_solar — wpisz nazwę nowego źródła integracji.",
+          "prefix": "Wspólny początek nazw encji w HA — w profilu zostanie zastąpiony zmienną prefiksu."
         }
       },
       "profile_capabilities": {
-        "title": "Capabilities — co falownik potrafi",
-        "description": "Zaznacz funkcje, które Twój falownik obsługuje. Optymalizator nie wybierze akcji spoza tej listy.",
+        "title": "Możliwości falownika",
+        "description": "Zaznacz funkcje, które Twój falownik faktycznie obsługuje. To ogranicza, jakie akcje sterujące będą dla niego dostępne.",
         "data": {
-          "grid_charge": "Ładowanie baterii z sieci",
-          "export": "Eksport energii do sieci",
-          "soc_control": "Sterowanie docelowym SOC baterii",
-          "mixed_charging": "Jednoczesne ładowanie PV + sieć"
+          "grid_charge": "Falownik potrafi ładować baterię z sieci",
+          "export": "Falownik potrafi eksportować energię do sieci",
+          "soc_control": "Falownik pozwala ustawić docelowy SOC baterii",
+          "mixed_charging": "Falownik potrafi ładować jednocześnie z PV i z sieci"
         }
       },
       "profile_summary": {
@@ -344,56 +347,89 @@
         "data": {}
       },
       "control_inverter": {
-        "title": "Sterowanie — Tryb pracy inwertera",
-        "description": "Zmapuj encje sterujące (opcjonalnie). Pozostaw puste, jeśli falownik ich nie ma.",
+        "title": "Tryb pracy inwertera",
+        "description": "Zmapuj encje, którymi steruje się falownikiem (opcjonalnie). Lista pokazuje tylko encje właściwego typu. Zostaw puste, jeśli Twój falownik danej funkcji nie ma.",
         "data": {
-          "work_mode": "Tryb pracy"
+          "work_mode": "Tryb pracy falownika (select)"
+        },
+        "data_description": {
+          "work_mode": "Encja select z trybem pracy falownika (np. Selling First / Zero Export to Load)."
         }
       },
       "control_battery": {
-        "title": "Sterowanie — Sterowanie baterią",
-        "description": "Zmapuj encje sterujące (opcjonalnie). Pozostaw puste, jeśli falownik ich nie ma.",
+        "title": "Sterowanie baterią",
+        "description": "Zmapuj encje, którymi steruje się falownikiem (opcjonalnie). Lista pokazuje tylko encje właściwego typu. Zostaw puste, jeśli Twój falownik danej funkcji nie ma.",
         "data": {
-          "battery_max_charge_current": "Maks. prąd ładowania baterii",
-          "battery_max_discharge_current": "Maks. prąd rozładowania baterii"
+          "battery_max_charge_current": "Maks. prąd ładowania baterii [A] (number)",
+          "battery_max_discharge_current": "Maks. prąd rozładowania baterii [A] (number)"
+        },
+        "data_description": {
+          "battery_max_charge_current": "Encja number ustawiająca limit prądu ładowania baterii w amperach.",
+          "battery_max_discharge_current": "Encja number ustawiająca limit prądu rozładowania baterii w amperach."
         }
       },
       "control_grid": {
-        "title": "Sterowanie — Sterowanie siecią",
-        "description": "Zmapuj encje sterujące (opcjonalnie). Pozostaw puste, jeśli falownik ich nie ma.",
+        "title": "Sterowanie siecią",
+        "description": "Zmapuj encje, którymi steruje się falownikiem (opcjonalnie). Lista pokazuje tylko encje właściwego typu. Zostaw puste, jeśli Twój falownik danej funkcji nie ma.",
         "data": {
-          "grid_peak_shaving": "Peak shaving z sieci"
+          "grid_peak_shaving": "Peak shaving z sieci — włącznik on/off (switch)"
+        },
+        "data_description": {
+          "grid_peak_shaving": "Encja switch włączająca/wyłączająca peak shaving z sieci. To przełącznik on/off, NIE wartość mocy."
         }
       },
       "control_pv": {
-        "title": "Sterowanie — Sterowanie PV",
-        "description": "Zmapuj encje sterujące (opcjonalnie). Pozostaw puste, jeśli falownik ich nie ma.",
+        "title": "Sterowanie PV",
+        "description": "Zmapuj encje, którymi steruje się falownikiem (opcjonalnie). Lista pokazuje tylko encje właściwego typu. Zostaw puste, jeśli Twój falownik danej funkcji nie ma.",
         "data": {
-          "pv_power_limit": "Limit mocy PV"
+          "pv_power_limit": "Limit mocy PV [W] (number)"
+        },
+        "data_description": {
+          "pv_power_limit": "Encja number ograniczająca moc PV w watach."
         }
       },
       "control_schedule": {
-        "title": "Sterowanie — Harmonogram (TOU)",
-        "description": "Zmapuj encje sterujące (opcjonalnie). Pozostaw puste, jeśli falownik ich nie ma.",
+        "title": "Harmonogram (TOU)",
+        "description": "Zmapuj encje, którymi steruje się falownikiem (opcjonalnie). Lista pokazuje tylko encje właściwego typu. Zostaw puste, jeśli Twój falownik danej funkcji nie ma.",
         "data": {
-          "tou_1_time": "TOU slot 1 — godzina startu",
-          "tou_1_soc": "TOU slot 1 — docelowy SOC",
-          "tou_1_charge_mode": "TOU slot 1 — tryb ładowania",
-          "tou_2_time": "TOU slot 2 — godzina startu",
-          "tou_2_soc": "TOU slot 2 — docelowy SOC",
-          "tou_2_charge_mode": "TOU slot 2 — tryb ładowania",
-          "tou_3_time": "TOU slot 3 — godzina startu",
-          "tou_3_soc": "TOU slot 3 — docelowy SOC",
-          "tou_3_charge_mode": "TOU slot 3 — tryb ładowania",
-          "tou_4_time": "TOU slot 4 — godzina startu",
-          "tou_4_soc": "TOU slot 4 — docelowy SOC",
-          "tou_4_charge_mode": "TOU slot 4 — tryb ładowania",
-          "tou_5_time": "TOU slot 5 — godzina startu",
-          "tou_5_soc": "TOU slot 5 — docelowy SOC",
-          "tou_5_charge_mode": "TOU slot 5 — tryb ładowania",
-          "tou_6_time": "TOU slot 6 — godzina startu",
-          "tou_6_soc": "TOU slot 6 — docelowy SOC",
-          "tou_6_charge_mode": "TOU slot 6 — tryb ładowania"
+          "tou_1_time": "Slot 1: godzina startu (time)",
+          "tou_1_soc": "Slot 1: docelowy SOC [%] (number)",
+          "tou_1_charge_mode": "Slot 1: tryb ładowania (select)",
+          "tou_2_time": "Slot 2: godzina startu (time)",
+          "tou_2_soc": "Slot 2: docelowy SOC [%] (number)",
+          "tou_2_charge_mode": "Slot 2: tryb ładowania (select)",
+          "tou_3_time": "Slot 3: godzina startu (time)",
+          "tou_3_soc": "Slot 3: docelowy SOC [%] (number)",
+          "tou_3_charge_mode": "Slot 3: tryb ładowania (select)",
+          "tou_4_time": "Slot 4: godzina startu (time)",
+          "tou_4_soc": "Slot 4: docelowy SOC [%] (number)",
+          "tou_4_charge_mode": "Slot 4: tryb ładowania (select)",
+          "tou_5_time": "Slot 5: godzina startu (time)",
+          "tou_5_soc": "Slot 5: docelowy SOC [%] (number)",
+          "tou_5_charge_mode": "Slot 5: tryb ładowania (select)",
+          "tou_6_time": "Slot 6: godzina startu (time)",
+          "tou_6_soc": "Slot 6: docelowy SOC [%] (number)",
+          "tou_6_charge_mode": "Slot 6: tryb ładowania (select)"
+        },
+        "data_description": {
+          "tou_1_time": "Encja time — godzina rozpoczęcia slotu 1 harmonogramu.",
+          "tou_1_soc": "Encja number — docelowy SOC baterii w slocie 1 (procent).",
+          "tou_1_charge_mode": "Encja select — źródło ładowania w slocie 1 (np. Sieć / Generator / Wyłączone).",
+          "tou_2_time": "Encja time — godzina rozpoczęcia slotu 2 harmonogramu.",
+          "tou_2_soc": "Encja number — docelowy SOC baterii w slocie 2 (procent).",
+          "tou_2_charge_mode": "Encja select — źródło ładowania w slocie 2 (np. Sieć / Generator / Wyłączone).",
+          "tou_3_time": "Encja time — godzina rozpoczęcia slotu 3 harmonogramu.",
+          "tou_3_soc": "Encja number — docelowy SOC baterii w slocie 3 (procent).",
+          "tou_3_charge_mode": "Encja select — źródło ładowania w slocie 3 (np. Sieć / Generator / Wyłączone).",
+          "tou_4_time": "Encja time — godzina rozpoczęcia slotu 4 harmonogramu.",
+          "tou_4_soc": "Encja number — docelowy SOC baterii w slocie 4 (procent).",
+          "tou_4_charge_mode": "Encja select — źródło ładowania w slocie 4 (np. Sieć / Generator / Wyłączone).",
+          "tou_5_time": "Encja time — godzina rozpoczęcia slotu 5 harmonogramu.",
+          "tou_5_soc": "Encja number — docelowy SOC baterii w slocie 5 (procent).",
+          "tou_5_charge_mode": "Encja select — źródło ładowania w slocie 5 (np. Sieć / Generator / Wyłączone).",
+          "tou_6_time": "Encja time — godzina rozpoczęcia slotu 6 harmonogramu.",
+          "tou_6_soc": "Encja number — docelowy SOC baterii w slocie 6 (procent).",
+          "tou_6_charge_mode": "Encja select — źródło ładowania w slocie 6 (np. Sieć / Generator / Wyłączone)."
         }
       }
     },

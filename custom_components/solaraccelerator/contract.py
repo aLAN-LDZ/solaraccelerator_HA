@@ -33,10 +33,10 @@ ACTIONS: list[str] = [
 # === Capabilities — co falownik potrafi (pole działania) ===
 # Format: (key, label). Profil deklaruje wartości bool; brak = False.
 CAPABILITIES: list[tuple[str, str]] = [
-    ("grid_charge", "Ładowanie baterii z sieci"),
-    ("export", "Eksport energii do sieci"),
-    ("soc_control", "Sterowanie docelowym SOC baterii"),
-    ("mixed_charging", "Jednoczesne ładowanie PV + sieć"),
+    ("grid_charge", "Falownik potrafi ładować baterię z sieci"),
+    ("export", "Falownik potrafi eksportować energię do sieci"),
+    ("soc_control", "Falownik pozwala ustawić docelowy SOC baterii"),
+    ("mixed_charging", "Falownik potrafi ładować jednocześnie z PV i z sieci"),
 ]
 CAPABILITY_KEYS: list[str] = [c[0] for c in CAPABILITIES]
 
@@ -56,9 +56,9 @@ def _tou_slots(count: int) -> list[tuple[str, str, str, str]]:
     """Zbuduj wpisy harmonogramu TOU dla ``count`` slotów (start + SOC + tryb ładowania)."""
     out: list[tuple[str, str, str, str]] = []
     for n in range(1, count + 1):
-        out.append((f"tou_{n}_time", f"TOU slot {n} — godzina startu", "time", "schedule"))
-        out.append((f"tou_{n}_soc", f"TOU slot {n} — docelowy SOC", "number", "schedule"))
-        out.append((f"tou_{n}_charge_mode", f"TOU slot {n} — tryb ładowania", "select", "schedule"))
+        out.append((f"tou_{n}_time", f"Slot {n}: godzina startu (time)", "time", "schedule"))
+        out.append((f"tou_{n}_soc", f"Slot {n}: docelowy SOC [%] (number)", "number", "schedule"))
+        out.append((f"tou_{n}_charge_mode", f"Slot {n}: tryb ładowania (select)", "select", "schedule"))
     return out
 
 
@@ -67,12 +67,13 @@ def _tou_slots(count: int) -> list[tuple[str, str, str, str]]:
 # Globalne „pokrętła" + harmonogram TOU (6 slotów). Falownik, który czegoś nie ma,
 # zostawia dane pole niezmapowane.
 CONTROL_CAPABILITIES: list[tuple[str, str, str, str]] = [
-    # Globalne ustawienia pracy
-    ("work_mode", "Tryb pracy", "select", "inverter"),
-    ("battery_max_charge_current", "Maks. prąd ładowania baterii", "number", "battery"),
-    ("battery_max_discharge_current", "Maks. prąd rozładowania baterii", "number", "battery"),
-    ("grid_peak_shaving", "Peak shaving z sieci", "switch", "grid"),
-    ("pv_power_limit", "Limit mocy PV", "number", "pv"),
+    # Globalne ustawienia pracy. Etykiety zawierają typ encji i jednostkę, żeby nie było
+    # wątpliwości (np. peak shaving to przełącznik on/off, nie wartość mocy).
+    ("work_mode", "Tryb pracy falownika (select)", "select", "inverter"),
+    ("battery_max_charge_current", "Maks. prąd ładowania baterii [A] (number)", "number", "battery"),
+    ("battery_max_discharge_current", "Maks. prąd rozładowania baterii [A] (number)", "number", "battery"),
+    ("grid_peak_shaving", "Peak shaving z sieci — włącznik on/off (switch)", "switch", "grid"),
+    ("pv_power_limit", "Limit mocy PV [W] (number)", "number", "pv"),
 ] + _tou_slots(6)
 
 CONTROL_KEYS: list[str] = [c[0] for c in CONTROL_CAPABILITIES]
