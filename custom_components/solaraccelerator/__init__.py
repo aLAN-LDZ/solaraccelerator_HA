@@ -25,6 +25,7 @@ from .const import (
     CONF_SERVER_URL,
     CONF_ENTITY_MAPPING,
     CONF_SOLARMAN_PREFIX,
+    CONF_CONFIG_MODE,
     CONF_EV_ENABLED,
     CONF_EV_PREFIX,
     CONF_CONTROLLABLE_DEVICES,
@@ -49,7 +50,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Załaduj integrację z wpisu konfiguracji.
 
     Inicjalizujemy słownik z całym stanem run-time — wartości z config flow
-    oraz bufory na dane pobierane z backendu (ceny, zysk, status live).
+    oraz bufory na dane pobierane z serwisu (ceny, zysk, status live).
     Sensory podlinkują się do tego słownika i będą z niego czytać.
     """
 
@@ -61,6 +62,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_SERVER_URL: entry.data.get(CONF_SERVER_URL),
         CONF_ENTITY_MAPPING: entry.data.get(CONF_ENTITY_MAPPING, {}),
         CONF_SOLARMAN_PREFIX: entry.data.get(CONF_SOLARMAN_PREFIX, ""),
+        # Tryb konfiguracji (Solarman / SolarAssistant / ręczny) — decyduje o schemacie
+        # nazw encji dosyłanym w paczce danych.
+        CONF_CONFIG_MODE: entry.data.get(CONF_CONFIG_MODE, ""),
         CONF_EV_ENABLED: entry.data.get(CONF_EV_ENABLED, False),
         CONF_EV_PREFIX: entry.data.get(CONF_EV_PREFIX, ""),
         # Custom sterowalne odbiorniki z OptionsFlow (entry.options, edytowalne bez
@@ -139,8 +143,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Karty Lovelace: proxy danych (server-side, dokłada klucz API z konfiguracji)
-    # + bundel karty pobierany z backendu i serwowany LOKALNIE z HA (działa nawet
-    # gdy sieć przeglądarki blokuje domenę backendu). Idempotentne.
+    # + bundel karty pobierany z serwisu i serwowany LOKALNIE z HA (działa nawet
+    # gdy sieć przeglądarki blokuje domenę serwisu). Idempotentne.
     async_register_chart_view(hass)
     server_url = entry.data.get(CONF_SERVER_URL) or DEFAULT_SERVER_URL
     integration = await async_get_integration(hass, DOMAIN)

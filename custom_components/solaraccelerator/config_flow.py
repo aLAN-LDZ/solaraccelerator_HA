@@ -54,6 +54,7 @@ from .const import (
     CONF_CONTROLLABLE_DEVICES,
     CONTROLLABLE_DEVICE_TYPES,
     CONFIG_MODE_SOLARMAN,
+    CONFIG_MODE_SOLARASSISTANT,
     CONFIG_MODE_MANUAL,
     DEFAULT_SERVER_URL,
     API_TEST_CONNECTION_ENDPOINT,
@@ -62,6 +63,7 @@ from .const import (
     SUPPORTED_INVERTERS,
     SUPPORTED_EV_CHARGERS,
     build_solarman_entity_mapping,
+    build_solarassistant_entity_mapping,
     build_ocpp_entity_mapping,
 )
 
@@ -209,6 +211,8 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if self.config_mode == CONFIG_MODE_SOLARMAN:
                 return await self.async_step_solarman_prefix()
+            elif self.config_mode == CONFIG_MODE_SOLARASSISTANT:
+                return await self.async_step_solarassistant_prefix()
             else:
                 return await self.async_step_entities_pv()
 
@@ -222,7 +226,8 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_CONFIG_MODE, default=CONFIG_MODE_SOLARMAN): SelectSelector(
                 SelectSelectorConfig(
                     options=[
-                        {"value": CONFIG_MODE_SOLARMAN, "label": "Prefix (automatyczne mapowanie)"},
+                        {"value": CONFIG_MODE_SOLARMAN, "label": "Solarman — prefix (automatyczne mapowanie)"},
+                        {"value": CONFIG_MODE_SOLARASSISTANT, "label": "SolarAssistant — prefix (automatyczne mapowanie)"},
                         {"value": CONFIG_MODE_MANUAL, "label": "Ręczne mapowanie encji"},
                     ],
                     mode=SelectSelectorMode.LIST,
@@ -261,6 +266,42 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="solarman_prefix",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_solarassistant_prefix(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Pobierz prefix urządzenia SolarAssistant i zbuduj domyślne mapowanie encji.
+
+        Prefix to slug głównego urządzenia falownika w HA (np.
+        ``deye_sunsynk_sol_ark_3_phase`` dla ``sensor.deye_sunsynk_sol_ark_3_phase_pv_power``).
+        Zapisujemy go w ``CONF_SOLARMAN_PREFIX`` — to z tego pola ``api.py`` buduje
+        ``inverterPrefix`` w payloadzie (wspólne dla obu schematów auto-mapowania).
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            prefix = user_input.get(CONF_SOLARMAN_PREFIX, "").strip().lower()
+
+            if not prefix:
+                errors[CONF_SOLARMAN_PREFIX] = "prefix_required"
+            elif " " in prefix or not prefix.replace("_", "").isalnum():
+                errors[CONF_SOLARMAN_PREFIX] = "invalid_prefix"
+            else:
+                self.solarman_prefix = prefix
+                self.entity_mapping = build_solarassistant_entity_mapping(prefix)
+                return await self.async_step_ev_charger()
+
+        schema = vol.Schema({
+            vol.Required(CONF_SOLARMAN_PREFIX): TextSelector(
+                TextSelectorConfig(type=TextSelectorType.TEXT)
+            ),
+        })
+
+        return self.async_show_form(
+            step_id="solarassistant_prefix",
             data_schema=schema,
             errors=errors,
         )
@@ -445,7 +486,7 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _create_entry(self) -> FlowResult:
         """Zapisz finalny wpis konfiguracji — wszystkie zebrane wartości w jednym entry.data."""
         title = "Solar Accelerator"
-        if self.config_mode == CONFIG_MODE_SOLARMAN:
+        if self.config_mode in (CONFIG_MODE_SOLARMAN, CONFIG_MODE_SOLARASSISTANT):
             title = f"Solar Accelerator ({self.solarman_prefix})"
 
         return self.async_create_entry(
@@ -470,10 +511,9 @@ class SolarAcceleratorOptionsFlow(config_entries.OptionsFlow):
 
     Dostępny przez przycisk „Konfiguruj" na karcie integracji. Pozwala dodawać i
     kasować dodatkowe urządzenia (ładowarka EV, CWU, pompa…), które integracja
-    udostępnia backendowi jako sterowalne odbiorniki. Lista trafia do
-    ``entry.options[CONF_CONTROLLABLE_DEVICES]`` i jest dosyłana w payloadzie
-    (``controllable_devices[]``) — patrz ``api.py`` i dokument
-    ``docs/ev_sterowalne_odbiorniki_wdrozenie.md`` w repo backendu.
+    udostępnia serwisowi jako sterowalne odbiorniki. Lista trafia do
+    ``entry.options[CONF_CONTROLLABLE_DEVICES]`` i jest dosyłana w paczce danych
+    (``controllable_devices[]`` — patrz ``api.py``).
 
     Nie ustawiamy ``self.config_entry`` (deprecation w nowszych HA) — trzymamy
     własną referencję ``self._entry``.

@@ -43,8 +43,11 @@ Po weryfikacji klucza kreator przeprowadzi przez kolejne kroki:
 
 **Falownik**
 1. **Model i tryb konfiguracji** — wybierasz model falownika (np. *Deye — SG0\*LP3*) oraz sposób mapowania encji:
-   - **Prefix (zalecane)** — integracja sama zbuduje mapowanie wg konwencji nazw integracji *Solarman* (HACS). Podajesz tylko prefix encji (np. `deye` dla `sensor.deye_pv1_power`).
+   - **Solarman — prefix (zalecane)** — integracja sama zbuduje mapowanie wg konwencji nazw integracji *Solarman* (HACS). Podajesz tylko prefix encji (np. `deye` dla `sensor.deye_pv1_power`).
+   - **SolarAssistant — prefix** — automatyczne mapowanie dla appliance *SolarAssistant* (MQTT). Podajesz prefix urządzenia falownika (np. `deye_sunsynk_sol_ark_3_phase` dla `sensor.deye_sunsynk_sol_ark_3_phase_pv_power`). Ten sam falownik, inne nazwy encji — integracja wybierze właściwy schemat zarówno dla odczytu danych, jak i dla sterowania z optymalizatora.
    - **Ręczny** — wybierasz każdą encję z Home Assistant samodzielnie (kroki: PV → Bateria → Inwerter → Sieć → Obciążenie → Temperatury).
+
+   > **SolarAssistant — uwagi:** liczniki energii (`*_energy_*`) są dzienne (resetują się dobowo) — dokładnie tego oczekuje serwis. Kilku sensorów diagnostycznych SolarAssistant nie wystawia (całkowita produkcja PV, SOH baterii, prąd/moc falownika per faza, status on/off‑grid, osobna temperatura transformatora DC) — pozostają puste i nie wpływają na obliczenia. Curtailment PV przy wymuszonym ładowaniu z sieci (`max_solar_power`) jest pominięty, bo ta encja siedzi pod drugim urządzeniem SolarAssistant.
 
 **Ładowarka EV (opcjonalnie)**
 2. **Czy masz ładowarkę EV przez OCPP?** — jeśli tak, analogicznie wybierasz model (np. *Autel — MaxiChargerAC 7.5KW*) i tryb (prefix integracji *OCPP* albo ręczne mapowanie).

@@ -15,7 +15,7 @@
       },
       "choose_mode": {
         "title": "Inverter - Model & Configuration",
-        "description": "Select your inverter model and how to map entities.\n\n**Prefix** - automatic mapping for Solarman integration. Just provide the entity prefix.\n\n**Manual** - manually select each entity from Home Assistant.",
+        "description": "Select your inverter model and how to map entities.\n\n**Solarman - prefix** - automatic mapping for Solarman integration. Just provide the entity prefix.\n\n**SolarAssistant - prefix** - automatic mapping for the SolarAssistant appliance (MQTT). Provide the device prefix.\n\n**Manual** - manually select each entity from Home Assistant.",
         "data": {
           "inverter_model": "Inverter model",
           "config_mode": "Configuration mode"
@@ -29,6 +29,16 @@
         },
         "data_description": {
           "solarman_prefix": "e.g. deye, solarman, inverter"
+        }
+      },
+      "solarassistant_prefix": {
+        "title": "Inverter - Entity Prefix (SolarAssistant)",
+        "description": "Enter the device prefix from SolarAssistant.\n\nExample: if your entities are named `sensor.deye_sunsynk_sol_ark_3_phase_pv_power`, the prefix is `deye_sunsynk_sol_ark_3_phase`.\n\nData is sent automatically at every full hour. Additionally, live data is pushed in real-time for accurate statistics.",
+        "data": {
+          "solarman_prefix": "Entity prefix"
+        },
+        "data_description": {
+          "solarman_prefix": "e.g. deye_sunsynk_sol_ark_3_phase"
         }
       },
       "entities_pv": {

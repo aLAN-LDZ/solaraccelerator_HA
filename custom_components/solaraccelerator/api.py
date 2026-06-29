@@ -1,4 +1,4 @@
-"""Klient HTTP do komunikacji z backendem Solar Accelerator.
+"""Klient HTTP do komunikacji z serwisem Solar Accelerator.
 
 Plik zawiera wyłącznie funkcje wykonujące zapytania do API serwera:
 - ``async_send_data``        — pełna paczka godzinowa,
@@ -30,6 +30,7 @@ from .const import (
     CONF_EV_PREFIX,
     CONF_SERVER_URL,
     CONF_SOLARMAN_PREFIX,
+    CONF_CONFIG_MODE,
     CONF_CONTROLLABLE_DEVICES,
     API_COMMAND_ACK_ENDPOINT,
     API_DATA_READY_ENDPOINT,
@@ -39,6 +40,7 @@ from .const import (
     API_SEND_DATA_ENDPOINT,
     EV_ENTITY_KEYS,
     INVERTER_KEYS,
+    scheme_from_config_mode,
 )
 from .helpers import convert_value
 
@@ -109,7 +111,7 @@ def _build_full_payload(
 
     Zawsze dołączamy ``inverterOnline`` (status łącza falownik↔HA, ustawiany przez
     ``health.update_inverter_health`` w pętli live). Gdy falownik jest **offline**,
-    NIE dołączamy wartości encji — leci sam status, żeby backend nie dostał zer
+    NIE dołączamy wartości encji — leci sam status, żeby serwis nie dostał zer
     psujących wykresy/statystyki.
 
     Zwraca: ``(payload, entities_count, ev_enabled)``.
@@ -119,6 +121,9 @@ def _build_full_payload(
     payload: dict[str, Any] = {
         "timestamp": dt_util.utcnow().isoformat(),
         "inverterPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
+        # Schemat nazw encji falownika (Solarman / SolarAssistant) — zależnie od tego
+        # jak falownik jest wystawiony w Home Assistant.
+        "haEntityScheme": scheme_from_config_mode(coordinator_data.get(CONF_CONFIG_MODE, "")),
         "inverterOnline": online,
     }
 
@@ -139,8 +144,7 @@ def _build_full_payload(
         payload["evPrefix"] = coordinator_data.get(CONF_EV_PREFIX, "")
 
     # Custom sterowalne odbiorniki (OptionsFlow → entry.options). Wysyłamy definicje
-    # (encje + typ) jako discovery — backend mapuje je na katalog urządzeń
-    # (metadata.additionalDevices). Dorzucamy też bieżący stan switcha, gdy dostępny.
+    # (encje + typ) jako discovery. Dorzucamy też bieżący stan switcha, gdy dostępny.
     controllable = _build_controllable_payload(hass, coordinator_data)
     if controllable:
         payload["controllable_devices"] = controllable
@@ -193,7 +197,7 @@ async def async_send_data(
     hass: HomeAssistant,
     coordinator_data: dict[str, Any],
 ) -> bool:
-    """Wyślij pełną paczkę danych do backendu (endpoint godzinowy).
+    """Wyślij pełną paczkę danych do serwisu (endpoint godzinowy).
 
     Funkcja aktualizuje pola w ``coordinator_data``:
     - ``connection_status``  — ``connected`` / ``auth_error`` / ``error`` / ``disconnected``,
@@ -265,7 +269,7 @@ async def async_fetch_prices(
     hass: HomeAssistant,
     coordinator_data: dict[str, Any],
 ) -> bool:
-    """Pobierz aktualne ceny energii (zakup + sprzedaż) z backendu.
+    """Pobierz aktualne ceny energii (zakup + sprzedaż) z serwisu.
 
     Wynik trafia do ``coordinator_data["prices"]`` jako słownik z pełnym kompletem
     pól (current/min/max/average dla obu kierunków + flagi tania/droga + provider).
@@ -331,9 +335,9 @@ async def async_fetch_profit(
     hass: HomeAssistant,
     coordinator_data: dict[str, Any],
 ) -> bool:
-    """Pobierz dzienny bilans finansowy instalacji PV z backendu.
+    """Pobierz dzienny bilans finansowy instalacji PV z serwisu.
 
-    Backend liczy zysk po przetworzeniu paczki godzinowej — dlatego pętla godzinowa
+    Serwer liczy zysk po przetworzeniu paczki godzinowej — dlatego pętla godzinowa
     najpierw wywołuje ``async_send_data``, potem czeka aż ``async_check_data_ready``
     zwróci ``True``, a dopiero potem fetchuje profit.
 
@@ -383,7 +387,7 @@ async def async_check_data_ready(
     hass: HomeAssistant,
     coordinator_data: dict[str, Any],
 ) -> bool:
-    """Sprawdź czy backend zakończył przetwarzanie ostatniej paczki godzinowej.
+    """Sprawdź czy serwis zakończył przetwarzanie ostatniej paczki godzinowej.
 
     Endpoint zwraca ``{"ready": true|false}``. Pętla godzinowa pollinguje to co 10s
     przez maksymalnie 30 prób (czyli ~5 minut), żeby nie pobierać profitu z nieaktualną
@@ -536,7 +540,7 @@ async def async_ack_command(
 ) -> None:
     """Potwierdź serwerowi wykonanie komendy (ACK).
 
-    Wysyłane zawsze — niezależnie od tego czy komenda się udała czy nie. Backend
+    Wysyłane zawsze — niezależnie od tego czy komenda się udała czy nie. Serwer
     używa ACK żeby usunąć komendę z kolejki ``pending_commands`` i wiedzieć, że
     nie musi jej ponawiać przy kolejnym live push.
 

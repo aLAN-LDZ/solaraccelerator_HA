@@ -2,7 +2,7 @@
 
 Trzy główne grupy:
 - klucze konfiguracji (``CONF_*``) — używane w config flow i ``entry.data``,
-- endpointy backendu (``API_*``)   — relatywne ścieżki na serwerze,
+- endpointy serwisu (``API_*``)   — relatywne ścieżki na serwerze,
 - definicja wymaganych encji       — lista pól które wysyłamy do API + helpery
   budujące domyślne mapowania dla integracji Solarman i OCPP.
 """
@@ -26,8 +26,8 @@ CONF_EV_MODEL = "ev_model"
 # energy_sensor, status_entity, nominal_power_w}. Trzymane w entry.options.
 CONF_CONTROLLABLE_DEVICES = "controllable_devices"
 
-# Typy sterowalnych odbiorników (do selecta w OptionsFlow). Spójne z device_type
-# po stronie backendu (additional_loads.device_type).
+# Typy sterowalnych odbiorników (do selecta w OptionsFlow). Wartość ``value``
+# jest wysyłana do serwisu jako typ urządzenia.
 CONTROLLABLE_DEVICE_TYPES = [
     {"value": "ev", "label": "Ładowarka EV"},
     {"value": "cwu", "label": "CWU / bojler"},
@@ -36,12 +36,24 @@ CONTROLLABLE_DEVICE_TYPES = [
 ]
 
 # Tryby konfiguracji wybierane w config flow:
-# - SOLARMAN: użytkownik podaje prefix integracji Solarman/OCPP a my budujemy mapowanie automatycznie
-# - MANUAL:   użytkownik mapuje każdą encję ręcznie
+# - SOLARMAN:       użytkownik podaje prefix integracji Solarman/HACS, budujemy mapowanie automatycznie
+# - SOLARASSISTANT: użytkownik podaje prefix urządzenia SolarAssistant (MQTT), mapowanie automatyczne
+# - MANUAL:         użytkownik mapuje każdą encję ręcznie
 CONFIG_MODE_SOLARMAN = "solarman"
+CONFIG_MODE_SOLARASSISTANT = "solarassistant"
 CONFIG_MODE_MANUAL = "manual"
 
-# Domyślny URL backendu (można nadpisać w config flow np. dla self-hosted)
+
+def scheme_from_config_mode(config_mode: str) -> str:
+    """Zmapuj tryb konfiguracji na schemat nazw encji wysyłany w paczce danych.
+
+    Falowniki Deye bywają wystawione w HA na dwa sposoby (Solarman vs
+    SolarAssistant) — różnią się nazwami encji. Tryb manualny traktujemy jak
+    schemat Solarman.
+    """
+    return CONFIG_MODE_SOLARASSISTANT if config_mode == CONFIG_MODE_SOLARASSISTANT else CONFIG_MODE_SOLARMAN
+
+# Domyślny URL serwisu (można nadpisać w config flow np. dla self-hosted)
 DEFAULT_SERVER_URL = "https://solaraccelerator.cloud"
 
 # === Wspierane modele urządzeń (lista rośnie z czasem) ===
@@ -60,7 +72,7 @@ ATTR_CONNECTION_STATUS = "connection_status"
 ATTR_ENTITIES_COUNT = "entities_count"
 ATTR_NEXT_SCHEDULED = "next_scheduled"
 
-# === Endpointy backendu (ścieżki względne, base URL trzyma config flow) ===
+# === Endpointy serwisu (ścieżki względne, base URL trzyma config flow) ===
 API_TEST_CONNECTION_ENDPOINT = "/api/homeassistant/test-connection"
 API_SEND_DATA_ENDPOINT = "/api/homeassistant/send-data"
 API_LIVE_ENDPOINT = "/api/homeassistant/live"
@@ -99,7 +111,7 @@ MIN_VERIFY_RETRIES = 0           # 0 = brak retry, klasyczne zachowanie
 MAX_VERIFY_RETRIES = 10
 
 # === Guard "Pilnuj ustawień" — pilnowanie stanu sterowanych encji ===
-# Po każdej komendzie backendu guard zapamiętuje docelowy stan encji i przez całą
+# Po każdej komendzie serwisu guard zapamiętuje docelowy stan encji i przez całą
 # godzinę pilnuje, żeby ten stan się utrzymał. Falownik Deye/Solarman po Modbusie
 # potrafi SAM zresetować rejestr do wcześniejszej wartości po kilku–kilkunastu
 # minutach — verify dawno przeszedł, ACK wysłany, a plan przestaje być realizowany.
@@ -113,7 +125,7 @@ DEFAULT_GUARD_ENABLED = True           # domyślnie ON — plan egzekwowany od r
 # oraz cichą porażkę poprzedniej korekty — bo pojedynczy write nie daje pewności.
 GUARD_SWEEP_INTERVAL = 60
 
-# Lista wszystkich pól które integracja może wysyłać do backendu.
+# Lista wszystkich pól które integracja może wysyłać do serwisu.
 # Format: (key, description, unit, category)
 # - ``key``         — nazwa pola w payloadzie API,
 # - ``description`` — czytelny opis (używany w UI config flow),
@@ -253,6 +265,58 @@ def build_solarman_entity_mapping(prefix: str) -> dict[str, str]:
         "load_frequency": f"sensor.{prefix}_grid_frequency",
         "radiator_temp": f"sensor.{prefix}_temperature",
         "dc_transformer_temp": f"sensor.{prefix}_dc_temperature",
+    }
+
+
+def build_solarassistant_entity_mapping(prefix: str) -> dict[str, str]:
+    """Zbuduj mapowanie encji dla appliance SolarAssistant (MQTT) na podstawie prefixu.
+
+    SolarAssistant eksponuje encje w schemacie ``sensor.{prefix}_{field}`` (prefix
+    to slug głównego urządzenia falownika, np. ``deye_sunsynk_sol_ark_3_phase``).
+    Liczniki energii (``*_energy_*``) są DZIENNE (resetują się dobowo).
+
+    Pola bez odpowiednika w SolarAssistant są pominięte (nie trafiają do paczki):
+    ``total_pv_generation`` (brak licznika życiowego), ``battery_soh``,
+    ``inverter_current_l1/l2/l3``, ``inverter_power``, ``grid_connected_status``,
+    ``dc_transformer_temp`` (jest tylko jedna temperatura).
+    """
+    return {
+        # PV
+        "day_pv_energy": f"sensor.{prefix}_pv_energy",
+        "pv1_power": f"sensor.{prefix}_pv_power_1",
+        "pv2_power": f"sensor.{prefix}_pv_power_2",
+        "pv1_voltage": f"sensor.{prefix}_pv_voltage_1",
+        "pv2_voltage": f"sensor.{prefix}_pv_voltage_2",
+        "pv1_current": f"sensor.{prefix}_pv_current_1",
+        "pv2_current": f"sensor.{prefix}_pv_current_2",
+        # Bateria
+        "day_battery_discharge": f"sensor.{prefix}_battery_energy_out",
+        "day_battery_charge": f"sensor.{prefix}_battery_energy_in",
+        "battery_power": f"sensor.{prefix}_battery_power",
+        "battery_current": f"sensor.{prefix}_battery_current",
+        "battery_temp": f"sensor.{prefix}_battery_temperature",
+        "battery_voltage": f"sensor.{prefix}_battery_voltage",
+        "battery_soc": f"sensor.{prefix}_battery_state_of_charge",
+        # Inwerter
+        "inverter_status": f"sensor.{prefix}_device_mode",
+        "inverter_voltage_l1": f"sensor.{prefix}_grid_voltage_1",
+        "inverter_voltage_l2": f"sensor.{prefix}_grid_voltage_2",
+        "inverter_voltage_l3": f"sensor.{prefix}_grid_voltage_3",
+        # Sieć
+        "grid_power": f"sensor.{prefix}_grid_power",
+        "grid_ct_power_l1": f"sensor.{prefix}_grid_power_1",
+        "grid_ct_power_l2": f"sensor.{prefix}_grid_power_2",
+        "grid_ct_power_l3": f"sensor.{prefix}_grid_power_3",
+        "day_grid_import": f"sensor.{prefix}_grid_energy_in",
+        "day_grid_export": f"sensor.{prefix}_grid_energy_out",
+        # Obciążenie
+        "day_load_energy": f"sensor.{prefix}_load_energy",
+        "load_power_l1": f"sensor.{prefix}_load_power_1",
+        "load_power_l2": f"sensor.{prefix}_load_power_2",
+        "load_power_l3": f"sensor.{prefix}_load_power_3",
+        "load_frequency": f"sensor.{prefix}_grid_frequency",
+        # Temperatury
+        "radiator_temp": f"sensor.{prefix}_temperature",
     }
 
 
