@@ -14,31 +14,20 @@
         }
       },
       "choose_mode": {
-        "title": "Falownik - model i konfiguracja",
-        "description": "Wybierz model falownika i sposób mapowania encji.\n\n**Solarman - prefix** - automatyczne mapowanie dla integracji Solarman. Wystarczy podać prefix encji.\n\n**SolarAssistant - prefix** - automatyczne mapowanie dla appliance SolarAssistant (MQTT). Podajesz prefix urządzenia.\n\n**Ręczne** - ręczny wybór każdej encji z Home Assistant.",
+        "title": "Falownik - konfiguracja",
+        "description": "Wybierz falownik i sposób mapowania encji. Model jest częścią wybranego profilu.\n\n**Profil (prefix)** - automatyczne mapowanie dla wybranego urządzenia. Wystarczy podać prefix encji.\n\n**Ręczne** - ręczny wybór każdej encji z Home Assistant.",
         "data": {
-          "inverter_model": "Model falownika",
-          "config_mode": "Tryb konfiguracji"
+          "config_mode": "Falownik / tryb"
         }
       },
-      "solarman_prefix": {
+      "prefix": {
         "title": "Falownik - Prefix encji",
-        "description": "Podaj prefix używany w integracji Solarman.\n\nPrzykład: jeśli Twoje encje nazywają się `sensor.deye_pv1_power`, to prefix to `deye`.\n\nDane są wysyłane automatycznie o każdej pełnej godzinie. Dodatkowo wysyłamy dane live w czasie rzeczywistym dla dokładnego prezentowania statystyk.",
+        "description": "Profil: {profile_label}\n\nPodaj prefix encji w Home Assistant — wspólny początek nazw encji Twojego falownika.\n\nDane są wysyłane automatycznie o każdej pełnej godzinie. Dodatkowo wysyłamy dane live w czasie rzeczywistym dla dokładnego prezentowania statystyk.",
         "data": {
           "solarman_prefix": "Prefix encji"
         },
         "data_description": {
-          "solarman_prefix": "np. deye, solarman, inverter"
-        }
-      },
-      "solarassistant_prefix": {
-        "title": "Falownik - Prefix encji (SolarAssistant)",
-        "description": "Podaj prefix urządzenia z SolarAssistant.\n\nPrzykład: jeśli Twoje encje nazywają się `sensor.deye_sunsynk_sol_ark_3_phase_pv_power`, to prefix to `deye_sunsynk_sol_ark_3_phase`.\n\nDane są wysyłane automatycznie o każdej pełnej godzinie. Dodatkowo wysyłamy dane live w czasie rzeczywistym dla dokładnego prezentowania statystyk.",
-        "data": {
-          "solarman_prefix": "Prefix encji"
-        },
-        "data_description": {
-          "solarman_prefix": "np. deye_sunsynk_sol_ark_3_phase"
+          "solarman_prefix": "{prefix_example}"
         }
       },
       "entities_pv": {
@@ -129,10 +118,9 @@
         }
       },
       "ev_choose_mode": {
-        "title": "Ładowarka EV - model i konfiguracja",
-        "description": "Wybierz model ładowarki i sposób mapowania encji.\n\n**Prefix** - automatyczne mapowanie dla integracji OCPP. Wystarczy podać prefix encji (Charge Point ID).\n\n**Ręczne** - ręczny wybór każdej encji z Home Assistant.",
+        "title": "Ładowarka EV - konfiguracja",
+        "description": "Wybierz sposób mapowania encji ładowarki.\n\n**Prefix** - automatyczne mapowanie dla integracji OCPP. Wystarczy podać prefix encji (Charge Point ID).\n\n**Ręczne** - ręczny wybór każdej encji z Home Assistant.",
         "data": {
-          "ev_model": "Model ładowarki",
           "ev_config_mode": "Tryb konfiguracji"
         }
       },

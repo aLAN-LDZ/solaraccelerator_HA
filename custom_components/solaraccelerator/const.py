@@ -3,8 +3,10 @@
 Trzy główne grupy:
 - klucze konfiguracji (``CONF_*``) — używane w config flow i ``entry.data``,
 - endpointy serwisu (``API_*``)   — relatywne ścieżki na serwerze,
-- definicja wymaganych encji       — lista pól które wysyłamy do API + helpery
-  budujące domyślne mapowania dla integracji Solarman i OCPP.
+- definicja wymaganych encji       — kanoniczna lista pól które wysyłamy do API.
+
+Domyślne mapowania ``klucz_kanoniczny → entity_id`` dla poszczególnych sposobów
+połączenia (Solarman, SolarAssistant, OCPP) żyją w pakiecie ``profiles/``.
 """
 
 DOMAIN = "solaraccelerator"
@@ -43,27 +45,14 @@ CONFIG_MODE_SOLARMAN = "solarman"
 CONFIG_MODE_SOLARASSISTANT = "solarassistant"
 CONFIG_MODE_MANUAL = "manual"
 
-
-def scheme_from_config_mode(config_mode: str) -> str:
-    """Zmapuj tryb konfiguracji na schemat nazw encji wysyłany w paczce danych.
-
-    Falowniki Deye bywają wystawione w HA na dwa sposoby (Solarman vs
-    SolarAssistant) — różnią się nazwami encji. Tryb manualny traktujemy jak
-    schemat Solarman.
-    """
-    return CONFIG_MODE_SOLARASSISTANT if config_mode == CONFIG_MODE_SOLARASSISTANT else CONFIG_MODE_SOLARMAN
+# Schemat nazw encji używany, gdy tryb nie ma profilu (tryb ręczny / nieznany).
+DEFAULT_ENTITY_SCHEME = CONFIG_MODE_SOLARMAN
 
 # Domyślny URL serwisu (można nadpisać w config flow np. dla self-hosted)
 DEFAULT_SERVER_URL = "https://solaraccelerator.cloud"
 
-# === Wspierane modele urządzeń (lista rośnie z czasem) ===
-SUPPORTED_INVERTERS = [
-    {"value": "deye_sg0xlp3", "label": "Deye - SG0*LP3"},
-]
-
-SUPPORTED_EV_CHARGERS = [
-    {"value": "autel_maxicharger_ac_75kw", "label": "Autel - MaxiChargerAC 7.5KW"},
-]
+# Wspierane modele urządzeń wynikają z profili w pakiecie ``profiles/`` — kreator
+# buduje listę wyboru bezpośrednio z rejestru profili (model jest częścią profilu).
 
 # Klucze atrybutów sensorów — używane do referencji w innych miejscach
 ATTR_LAST_SENT = "last_sent"
@@ -217,126 +206,3 @@ ENTITY_CATEGORIES = {
     "temp": "Temperatury",
     "ev_charger": "Ładowarka EV",
 }
-
-
-def build_solarman_entity_mapping(prefix: str) -> dict[str, str]:
-    """Zbuduj mapowanie encji dla integracji Solarman na podstawie podanego prefixu.
-
-    Integracja Solarman (HACS) używa konwencji nazewnictwa ``sensor.{prefix}_{field}``.
-    Funkcja zwraca słownik klucz_API → entity_id HA, który użytkownik może później
-    skorygować ręcznie jeśli któryś z domyślnych identyfikatorów nie pasuje.
-    """
-    return {
-        "day_pv_energy": f"sensor.{prefix}_today_production",
-        "pv1_power": f"sensor.{prefix}_pv1_power",
-        "pv2_power": f"sensor.{prefix}_pv2_power",
-        "pv1_voltage": f"sensor.{prefix}_pv1_voltage",
-        "pv2_voltage": f"sensor.{prefix}_pv2_voltage",
-        "pv1_current": f"sensor.{prefix}_pv1_current",
-        "pv2_current": f"sensor.{prefix}_pv2_current",
-        "total_pv_generation": f"sensor.{prefix}_total_production",
-        "day_battery_discharge": f"sensor.{prefix}_today_battery_discharge",
-        "day_battery_charge": f"sensor.{prefix}_today_battery_charge",
-        "battery_power": f"sensor.{prefix}_battery_power",
-        "battery_current": f"sensor.{prefix}_battery_current",
-        "battery_temp": f"sensor.{prefix}_battery_temperature",
-        "battery_voltage": f"sensor.{prefix}_battery_voltage",
-        "battery_soc": f"sensor.{prefix}_battery",
-        "battery_soh": f"sensor.{prefix}_battery_soh",
-        "inverter_status": f"sensor.{prefix}_device_relay",
-        "inverter_voltage_l1": f"sensor.{prefix}_grid_l1_voltage",
-        "inverter_voltage_l2": f"sensor.{prefix}_grid_l2_voltage",
-        "inverter_voltage_l3": f"sensor.{prefix}_grid_l3_voltage",
-        "inverter_current_l1": f"sensor.{prefix}_internal_ct1_current",
-        "inverter_current_l2": f"sensor.{prefix}_internal_ct2_current",
-        "inverter_current_l3": f"sensor.{prefix}_internal_ct3_current",
-        "inverter_power": f"sensor.{prefix}_internal_power",
-        "grid_power": f"sensor.{prefix}_grid_power",
-        "grid_ct_power_l1": f"sensor.{prefix}_grid_l1_power",
-        "grid_ct_power_l2": f"sensor.{prefix}_grid_l2_power",
-        "grid_ct_power_l3": f"sensor.{prefix}_grid_l3_power",
-        "day_grid_import": f"sensor.{prefix}_today_energy_import",
-        "day_grid_export": f"sensor.{prefix}_today_energy_export",
-        "grid_connected_status": f"binary_sensor.{prefix}_grid",
-        "day_load_energy": f"sensor.{prefix}_today_load_consumption",
-        "load_power_l1": f"sensor.{prefix}_load_l1_power",
-        "load_power_l2": f"sensor.{prefix}_load_l2_power",
-        "load_power_l3": f"sensor.{prefix}_load_l3_power",
-        "load_frequency": f"sensor.{prefix}_grid_frequency",
-        "radiator_temp": f"sensor.{prefix}_temperature",
-        "dc_transformer_temp": f"sensor.{prefix}_dc_temperature",
-    }
-
-
-def build_solarassistant_entity_mapping(prefix: str) -> dict[str, str]:
-    """Zbuduj mapowanie encji dla appliance SolarAssistant (MQTT) na podstawie prefixu.
-
-    SolarAssistant eksponuje encje w schemacie ``sensor.{prefix}_{field}`` (prefix
-    to slug głównego urządzenia falownika, np. ``deye_sunsynk_sol_ark_3_phase``).
-    Liczniki energii (``*_energy_*``) są DZIENNE (resetują się dobowo).
-
-    Pola bez odpowiednika w SolarAssistant są pominięte (nie trafiają do paczki):
-    ``total_pv_generation`` (brak licznika życiowego), ``battery_soh``,
-    ``inverter_current_l1/l2/l3``, ``inverter_power``, ``grid_connected_status``,
-    ``dc_transformer_temp`` (jest tylko jedna temperatura).
-    """
-    return {
-        # PV
-        "day_pv_energy": f"sensor.{prefix}_pv_energy",
-        "pv1_power": f"sensor.{prefix}_pv_power_1",
-        "pv2_power": f"sensor.{prefix}_pv_power_2",
-        "pv1_voltage": f"sensor.{prefix}_pv_voltage_1",
-        "pv2_voltage": f"sensor.{prefix}_pv_voltage_2",
-        "pv1_current": f"sensor.{prefix}_pv_current_1",
-        "pv2_current": f"sensor.{prefix}_pv_current_2",
-        # Bateria
-        "day_battery_discharge": f"sensor.{prefix}_battery_energy_out",
-        "day_battery_charge": f"sensor.{prefix}_battery_energy_in",
-        "battery_power": f"sensor.{prefix}_battery_power",
-        "battery_current": f"sensor.{prefix}_battery_current",
-        "battery_temp": f"sensor.{prefix}_battery_temperature",
-        "battery_voltage": f"sensor.{prefix}_battery_voltage",
-        "battery_soc": f"sensor.{prefix}_battery_state_of_charge",
-        # Inwerter
-        "inverter_status": f"sensor.{prefix}_device_mode",
-        "inverter_voltage_l1": f"sensor.{prefix}_grid_voltage_1",
-        "inverter_voltage_l2": f"sensor.{prefix}_grid_voltage_2",
-        "inverter_voltage_l3": f"sensor.{prefix}_grid_voltage_3",
-        # Sieć
-        "grid_power": f"sensor.{prefix}_grid_power",
-        "grid_ct_power_l1": f"sensor.{prefix}_grid_power_1",
-        "grid_ct_power_l2": f"sensor.{prefix}_grid_power_2",
-        "grid_ct_power_l3": f"sensor.{prefix}_grid_power_3",
-        "day_grid_import": f"sensor.{prefix}_grid_energy_in",
-        "day_grid_export": f"sensor.{prefix}_grid_energy_out",
-        # Obciążenie
-        "day_load_energy": f"sensor.{prefix}_load_energy",
-        "load_power_l1": f"sensor.{prefix}_load_power_1",
-        "load_power_l2": f"sensor.{prefix}_load_power_2",
-        "load_power_l3": f"sensor.{prefix}_load_power_3",
-        "load_frequency": f"sensor.{prefix}_grid_frequency",
-        # Temperatury
-        "radiator_temp": f"sensor.{prefix}_temperature",
-    }
-
-
-def build_ocpp_entity_mapping(prefix: str) -> dict[str, str]:
-    """Zbuduj mapowanie encji ładowarki EV dla integracji OCPP na podstawie prefixu.
-
-    Integracja OCPP (HACS) tworzy encje w schemacie ``sensor.{prefix}_{field}``,
-    gdzie ``{prefix}`` to Charge Point ID (np. ``arccharger``). Tak jak przy Solarmanie
-    użytkownik może później ręcznie poprawić każdy wpis w trybie manualnym.
-    """
-    return {
-        "status": f"sensor.{prefix}_status",
-        "status_connector": f"sensor.{prefix}_status_connector",
-        "vendor": f"sensor.{prefix}_vendor",
-        "power_active_import": f"sensor.{prefix}_power_active_import",
-        "energy_session": f"sensor.{prefix}_energy_session",
-        "energy_active_import_register": f"sensor.{prefix}_energy_active_import_register",
-        "current_import": f"sensor.{prefix}_current_import",
-        "voltage": f"sensor.{prefix}_voltage",
-        "time_session": f"sensor.{prefix}_time_session",
-        "error_code": f"sensor.{prefix}_error_code",
-        "transaction_id": f"sensor.{prefix}_transaction_id",
-    }

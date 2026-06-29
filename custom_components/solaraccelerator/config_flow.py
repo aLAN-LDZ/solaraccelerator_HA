@@ -2,8 +2,8 @@
 
 Kroki dodawania integracji:
 1. ``user``                — klucz API + URL serwera (walidacja przez GET test-connection),
-2. ``choose_mode``         — wybór modelu falownika i trybu (auto przez prefix / ręcznie),
-3a. ``solarman_prefix``    — gdy tryb auto: prefix integracji Solarman,
+2. ``choose_mode``         — wybór modelu falownika i trybu (profil przez prefix / ręcznie),
+3a. ``prefix``             — gdy wybrano profil: prefix encji, z którego budujemy mapowanie,
 3b. ``entities_pv/...``    — gdy tryb manualny: mapowanie encji w 6 ekranach (PV, bateria,
    inwerter, sieć, obciążenie, temperatury),
 4. ``ev_charger``          — pytanie czy użytkownik ma ładowarkę EV,
@@ -54,17 +54,17 @@ from .const import (
     CONF_CONTROLLABLE_DEVICES,
     CONTROLLABLE_DEVICE_TYPES,
     CONFIG_MODE_SOLARMAN,
-    CONFIG_MODE_SOLARASSISTANT,
     CONFIG_MODE_MANUAL,
     DEFAULT_SERVER_URL,
     API_TEST_CONNECTION_ENDPOINT,
     REQUIRED_ENTITIES,
     ENTITY_CATEGORIES,
-    SUPPORTED_INVERTERS,
-    SUPPORTED_EV_CHARGERS,
-    build_solarman_entity_mapping,
-    build_solarassistant_entity_mapping,
-    build_ocpp_entity_mapping,
+)
+from .profiles import (
+    ROLE_EV_CHARGER,
+    ROLE_INVERTER,
+    get_profile,
+    list_profiles,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -127,6 +127,11 @@ async def async_validate_api_key(
 def get_entities_for_category(category: str) -> list[tuple[str, str, str, str]]:
     """Zwróć wszystkie wymagane encje należące do danej kategorii (pv/battery/...)."""
     return [e for e in REQUIRED_ENTITIES if e[3] == category]
+
+
+def _model_label(profile) -> str:
+    """Czytelny model urządzenia z profilu (lub 'manual' dla trybu ręcznego)."""
+    return f"{profile.manufacturer} {profile.model}" if profile else CONFIG_MODE_MANUAL
 
 
 class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -204,32 +209,30 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_choose_mode(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Wybór modelu falownika oraz trybu konfiguracji (Solarman prefix vs ręczne mapowanie)."""
+        """Wybór profilu falownika (producent+model+źródło) albo trybu ręcznego.
+
+        Model falownika jest częścią profilu, więc nie ma osobnego pola modelu —
+        wybranie profilu ustala zarazem model (zapisywany informacyjnie).
+        """
         if user_input is not None:
             self.config_mode = user_input.get(CONF_CONFIG_MODE, CONFIG_MODE_MANUAL)
-            self.inverter_model = user_input.get(CONF_INVERTER_MODEL, "")
+            self.inverter_model = _model_label(get_profile(self.config_mode))
 
-            if self.config_mode == CONFIG_MODE_SOLARMAN:
-                return await self.async_step_solarman_prefix()
-            elif self.config_mode == CONFIG_MODE_SOLARASSISTANT:
-                return await self.async_step_solarassistant_prefix()
-            else:
+            if self.config_mode == CONFIG_MODE_MANUAL:
                 return await self.async_step_entities_pv()
+            return await self.async_step_prefix()
+
+        # Lista wyboru: po jednym profilu falownika z rejestru + tryb ręczny.
+        mode_options = [
+            {"value": p.id, "label": p.label} for p in list_profiles(ROLE_INVERTER)
+        ]
+        mode_options.append({"value": CONFIG_MODE_MANUAL, "label": "Ręczne mapowanie encji"})
+        default_mode = mode_options[0]["value"]
 
         schema = vol.Schema({
-            vol.Required(CONF_INVERTER_MODEL): SelectSelector(
+            vol.Required(CONF_CONFIG_MODE, default=default_mode): SelectSelector(
                 SelectSelectorConfig(
-                    options=SUPPORTED_INVERTERS,
-                    mode=SelectSelectorMode.DROPDOWN,
-                )
-            ),
-            vol.Required(CONF_CONFIG_MODE, default=CONFIG_MODE_SOLARMAN): SelectSelector(
-                SelectSelectorConfig(
-                    options=[
-                        {"value": CONFIG_MODE_SOLARMAN, "label": "Solarman — prefix (automatyczne mapowanie)"},
-                        {"value": CONFIG_MODE_SOLARASSISTANT, "label": "SolarAssistant — prefix (automatyczne mapowanie)"},
-                        {"value": CONFIG_MODE_MANUAL, "label": "Ręczne mapowanie encji"},
-                    ],
+                    options=mode_options,
                     mode=SelectSelectorMode.LIST,
                 )
             ),
@@ -240,46 +243,16 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=schema,
         )
 
-    async def async_step_solarman_prefix(
+    async def async_step_prefix(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Pobierz prefix integracji Solarman i zbuduj domyślne mapowanie encji."""
-        errors: dict[str, str] = {}
+        """Pobierz prefix encji i zbuduj domyślne mapowanie wg wybranego profilu.
 
-        if user_input is not None:
-            prefix = user_input.get(CONF_SOLARMAN_PREFIX, "").strip().lower()
-
-            if not prefix:
-                errors[CONF_SOLARMAN_PREFIX] = "prefix_required"
-            elif " " in prefix or not prefix.replace("_", "").isalnum():
-                errors[CONF_SOLARMAN_PREFIX] = "invalid_prefix"
-            else:
-                self.solarman_prefix = prefix
-                self.entity_mapping = build_solarman_entity_mapping(prefix)
-                return await self.async_step_ev_charger()
-
-        schema = vol.Schema({
-            vol.Required(CONF_SOLARMAN_PREFIX): TextSelector(
-                TextSelectorConfig(type=TextSelectorType.TEXT)
-            ),
-        })
-
-        return self.async_show_form(
-            step_id="solarman_prefix",
-            data_schema=schema,
-            errors=errors,
-        )
-
-    async def async_step_solarassistant_prefix(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Pobierz prefix urządzenia SolarAssistant i zbuduj domyślne mapowanie encji.
-
-        Prefix to slug głównego urządzenia falownika w HA (np.
-        ``deye_sunsynk_sol_ark_3_phase`` dla ``sensor.deye_sunsynk_sol_ark_3_phase_pv_power``).
-        Zapisujemy go w ``CONF_SOLARMAN_PREFIX`` — to z tego pola ``api.py`` buduje
-        ``inverterPrefix`` w payloadzie (wspólne dla obu schematów auto-mapowania).
+        Prefix zapisujemy w ``CONF_SOLARMAN_PREFIX`` — to z tego pola budowany jest
+        ``inverterPrefix`` w paczce danych (wspólne dla wszystkich profili falownika).
+        Użytkownik może później ręcznie skorygować pojedyncze encje.
         """
+        profile = get_profile(self.config_mode)
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -289,9 +262,11 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_SOLARMAN_PREFIX] = "prefix_required"
             elif " " in prefix or not prefix.replace("_", "").isalnum():
                 errors[CONF_SOLARMAN_PREFIX] = "invalid_prefix"
+            elif profile is None:
+                errors["base"] = "unknown"
             else:
                 self.solarman_prefix = prefix
-                self.entity_mapping = build_solarassistant_entity_mapping(prefix)
+                self.entity_mapping = profile.build_mapping(prefix)
                 return await self.async_step_ev_charger()
 
         schema = vol.Schema({
@@ -301,9 +276,13 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         })
 
         return self.async_show_form(
-            step_id="solarassistant_prefix",
+            step_id="prefix",
             data_schema=schema,
             errors=errors,
+            description_placeholders={
+                "profile_label": profile.label if profile else "",
+                "prefix_example": profile.prefix_example if profile else "",
+            },
         )
 
     async def _async_step_entities(
@@ -414,9 +393,12 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_ev_choose_mode(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Wybór modelu ładowarki EV i trybu konfiguracji (prefix OCPP vs ręcznie)."""
+        """Wybór trybu konfiguracji ładowarki EV (prefix OCPP vs ręcznie).
+
+        Model ładowarki pochodzi z profilu EV (nie ma osobnego pola modelu).
+        """
         if user_input is not None:
-            self.ev_model = user_input.get(CONF_EV_MODEL, "")
+            self.ev_model = _model_label(list_profiles(ROLE_EV_CHARGER)[0])
             self.ev_config_mode = user_input.get(CONF_EV_CONFIG_MODE, CONFIG_MODE_MANUAL)
 
             if self.ev_config_mode == CONFIG_MODE_SOLARMAN:
@@ -425,12 +407,6 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_entities_ev_charger()
 
         schema = vol.Schema({
-            vol.Required(CONF_EV_MODEL, default=SUPPORTED_EV_CHARGERS[0]["value"]): SelectSelector(
-                SelectSelectorConfig(
-                    options=SUPPORTED_EV_CHARGERS,
-                    mode=SelectSelectorMode.DROPDOWN,
-                )
-            ),
             vol.Required(CONF_EV_CONFIG_MODE, default=CONFIG_MODE_SOLARMAN): SelectSelector(
                 SelectSelectorConfig(
                     options=[
@@ -462,7 +438,8 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_EV_PREFIX] = "invalid_prefix"
             else:
                 self.ev_prefix = prefix
-                self.entity_mapping.update(build_ocpp_entity_mapping(prefix))
+                ev_profile = list_profiles(ROLE_EV_CHARGER)[0]
+                self.entity_mapping.update(ev_profile.build_mapping(prefix))
                 return self._create_entry()
 
         schema = vol.Schema({
@@ -486,7 +463,7 @@ class SolarAcceleratorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _create_entry(self) -> FlowResult:
         """Zapisz finalny wpis konfiguracji — wszystkie zebrane wartości w jednym entry.data."""
         title = "Solar Accelerator"
-        if self.config_mode in (CONFIG_MODE_SOLARMAN, CONFIG_MODE_SOLARASSISTANT):
+        if self.config_mode != CONFIG_MODE_MANUAL and self.solarman_prefix:
             title = f"Solar Accelerator ({self.solarman_prefix})"
 
         return self.async_create_entry(

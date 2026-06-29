@@ -38,13 +38,24 @@ from .const import (
     API_PRICES_ENDPOINT,
     API_PROFIT_ENDPOINT,
     API_SEND_DATA_ENDPOINT,
+    DEFAULT_ENTITY_SCHEME,
     EV_ENTITY_KEYS,
     INVERTER_KEYS,
-    scheme_from_config_mode,
 )
 from .helpers import convert_value
+from .profiles import get_profile
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _scheme_for_config_mode(config_mode: str) -> str:
+    """Zwróć schemat nazw encji wysyłany w paczce danych dla danego trybu.
+
+    Schemat bierzemy z wybranego profilu. Tryb ręczny (oraz nieznany) nie ma
+    profilu — używamy schematu domyślnego.
+    """
+    profile = get_profile(config_mode)
+    return profile.source if profile else DEFAULT_ENTITY_SCHEME
 
 
 def _build_entities_payload(
@@ -123,7 +134,7 @@ def _build_full_payload(
         "inverterPrefix": coordinator_data.get(CONF_SOLARMAN_PREFIX, ""),
         # Schemat nazw encji falownika (Solarman / SolarAssistant) — zależnie od tego
         # jak falownik jest wystawiony w Home Assistant.
-        "haEntityScheme": scheme_from_config_mode(coordinator_data.get(CONF_CONFIG_MODE, "")),
+        "haEntityScheme": _scheme_for_config_mode(coordinator_data.get(CONF_CONFIG_MODE, "")),
         "inverterOnline": online,
     }
 
