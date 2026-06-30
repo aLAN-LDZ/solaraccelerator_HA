@@ -78,6 +78,20 @@ from .profiles import (
 CONF_INVERTER = "inverter"
 CONF_SOURCE = "source"
 
+# Domeny encji dopuszczone przy mapowaniu STEROWANIA — tylko encje ustawialne (sterowanie
+# bywa wystawione jako number/select/switch/time itd. zależnie od integracji). Kodek
+# zostanie dobrany później ze snapshotu, więc nie zawężamy do typu kanonicznego knoba.
+CONTROL_ENTITY_DOMAINS = [
+    "number",
+    "input_number",
+    "select",
+    "input_select",
+    "switch",
+    "input_boolean",
+    "time",
+    "input_datetime",
+]
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -755,8 +769,15 @@ class SolarAcceleratorOptionsFlow(config_entries.OptionsFlow):
     async def _async_step_control(
         self, category: str, next_step: str, user_input: dict[str, Any] | None
     ) -> FlowResult:
-        """Wspólna obsługa kroków mapowania encji sterujących (wszystkie pola opcjonalne)."""
+        """Wspólna obsługa kroków mapowania encji sterujących (wszystkie pola opcjonalne).
+
+        Selektor pokazuje encje wielu typów (sterowanie bywa wystawione jako number/
+        select/switch/time itd. zależnie od integracji) — kodek dobierze się później ze
+        snapshotu. Dla TOU pytamy tylko o slot 1; sloty 2–6 generuje skrypt z wzorca.
+        """
         controls = contract.controls_for_category(category)
+        if category == "schedule":
+            controls = [c for c in controls if c[0].startswith("tou_1_")]
         current: dict[str, str] = dict(self._profile.get("control_mapping", {}))
 
         if user_input is not None:
@@ -773,7 +794,7 @@ class SolarAcceleratorOptionsFlow(config_entries.OptionsFlow):
         for key, _label, _vt, _cat in controls:
             default = current.get(key, vol.UNDEFINED)
             schema_dict[vol.Optional(key, default=default)] = EntitySelector(
-                EntitySelectorConfig(domain=contract.control_entity_domains(key))
+                EntitySelectorConfig(domain=CONTROL_ENTITY_DOMAINS)
             )
 
         return self.async_show_form(
@@ -795,7 +816,23 @@ class SolarAcceleratorOptionsFlow(config_entries.OptionsFlow):
         return await self._async_step_control("pv", "control_schedule", user_input)
 
     async def async_step_control_schedule(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        return await self._async_step_control("schedule", "profile_summary", user_input)
+        return await self._async_step_control("schedule", "control_extra", user_input)
+
+    async def async_step_control_extra(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Dodatkowe encje sterujące spoza knobów (np. drugi switch fan-outu)."""
+        if user_input is not None:
+            self._profile["control_extra"] = user_input.get("control_extra", []) or []
+            return await self.async_step_profile_summary()
+
+        default = self._profile.get("control_extra", [])
+        schema = vol.Schema({
+            vol.Optional("control_extra", default=default): EntitySelector(
+                EntitySelectorConfig(domain=CONTROL_ENTITY_DOMAINS, multiple=True)
+            ),
+        })
+        return self.async_show_form(step_id="control_extra", data_schema=schema)
 
     async def async_step_profile_summary(
         self, user_input: dict[str, Any] | None = None

@@ -390,7 +390,7 @@
       },
       "control_schedule": {
         "title": "Harmonogram (TOU)",
-        "description": "Zmapuj encje, którymi steruje się falownikiem (opcjonalnie). Lista pokazuje tylko encje właściwego typu. Zostaw puste, jeśli Twój falownik danej funkcji nie ma.",
+        "description": "Zmapuj encje harmonogramu TOU (opcjonalnie). Wystarczy SLOT 1 — sloty 2–6 wygenerujemy wzorcem. Lista pokazuje encje wielu typów (czas bywa też jako number).",
         "data": {
           "tou_1_time": "Slot 1: godzina startu (time)",
           "tou_1_soc": "Slot 1: docelowy SOC [%] (number)",
@@ -430,6 +430,13 @@
           "tou_6_time": "Encja time — godzina rozpoczęcia slotu 6 harmonogramu.",
           "tou_6_soc": "Encja number — docelowy SOC baterii w slocie 6 (procent).",
           "tou_6_charge_mode": "Encja select — źródło ładowania w slocie 6 (np. Sieć / Generator / Wyłączone)."
+        }
+      },
+      "control_extra": {
+        "title": "Dodatkowe encje sterujące",
+        "description": "Wskaż encje sterujące, które nie pasowały do żadnej pozycji wyżej — np. drugi przełącznik trybu ładowania (osobny grid i gen). Złożymy z nich profil.",
+        "data": {
+          "control_extra": "Dodatkowe encje"
         }
       }
     },

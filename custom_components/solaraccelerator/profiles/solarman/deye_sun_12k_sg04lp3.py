@@ -7,6 +7,36 @@ from __future__ import annotations
 
 from .._base import Profile, ROLE_INVERTER
 
+
+def _control_bindings() -> dict[str, dict]:
+    """Bindingi sterujące Solarman. UWAGA: etykiety opcji selectów (work_mode, charging)
+    wymagają potwierdzenia z realną instalacją Solarman."""
+    bindings: dict[str, dict] = {
+        "work_mode": {
+            "entity": "select.{prefix}_work_mode", "codec": "enum",
+            "params": {"options": {"export_first": "Export First",
+                                   "zero_export_to_load": "Zero Export To Load"}},
+        },
+        "battery_max_charge_current": {
+            "entity": "number.{prefix}_battery_max_charging_current", "codec": "number"},
+        "battery_max_discharge_current": {
+            "entity": "number.{prefix}_battery_max_discharging_current", "codec": "number"},
+        "pv_power_limit": {"entity": "number.{prefix}_pv_power", "codec": "number"},
+        "grid_peak_shaving": {"entity": "switch.{prefix}_grid_peak_shaving", "codec": "bool_switch"},
+    }
+    for n in range(1, 7):
+        bindings[f"tou_{n}_time"] = {
+            "entity": f"time.{{prefix}}_program_{n}_time", "codec": "time_iso"}
+        bindings[f"tou_{n}_soc"] = {
+            "entity": f"number.{{prefix}}_program_{n}_soc", "codec": "number"}
+        bindings[f"tou_{n}_charge_mode"] = {
+            "entity": f"select.{{prefix}}_program_{n}_charging", "codec": "enum",
+            "params": {"options": {"off": "Disabled", "grid": "Grid",
+                                   "gen": "Generator", "both": "Both"}},
+        }
+    return bindings
+
+
 PROFILE = Profile(
     manufacturer="Deye",
     model="SUN-12K-SG04LP3",
@@ -15,6 +45,7 @@ PROFILE = Profile(
     role=ROLE_INVERTER,
     prefix_example="np. deye, solarman, inverter",
     aliases=("solarman",),
+    control_bindings=_control_bindings(),
     read_template={
         # PV
         "day_pv_energy": "sensor.{prefix}_today_production",

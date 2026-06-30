@@ -390,7 +390,7 @@
       },
       "control_schedule": {
         "title": "Schedule (TOU)",
-        "description": "Map the entities used to control the inverter (optional). The list shows only entities of the matching type. Leave empty if your inverter doesn't have a given function.",
+        "description": "Map TOU schedule entities (optional). SLOT 1 is enough — slots 2–6 are generated from the pattern. The list shows multiple entity types (time may also be a number).",
         "data": {
           "tou_1_time": "Slot 1: start time (time)",
           "tou_1_soc": "Slot 1: target SOC [%] (number)",
@@ -430,6 +430,13 @@
           "tou_6_time": "A time entity — start time of schedule slot 6.",
           "tou_6_soc": "A number entity — target battery SOC in slot 6 (percent).",
           "tou_6_charge_mode": "A select entity — charge source in slot 6 (e.g. Grid / Generator / Off)."
+        }
+      },
+      "control_extra": {
+        "title": "Additional control entities",
+        "description": "Pick control entities that didn't fit any field above — e.g. a second charge-mode switch (separate grid and gen). We'll assemble them into the profile.",
+        "data": {
+          "control_extra": "Additional entities"
         }
       }
     },

@@ -12,7 +12,7 @@ oficjalnego wsparcia.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Callable
 
 
 def _slug(value: str) -> str:
@@ -43,23 +43,23 @@ def detect_prefix(entity_ids: list[str]) -> str:
     return "_".join(common)
 
 
+def parametrize_entity(entity_id: str, prefix: str) -> str:
+    """Zamień pojedynczy entity_id na szablon z ``{prefix}`` (lub zostaw dosłowny)."""
+    if not entity_id or "." not in entity_id:
+        return entity_id
+    domain, object_id = entity_id.split(".", 1)
+    if prefix and object_id.startswith(prefix + "_"):
+        return f"{domain}.{{prefix}}_{object_id[len(prefix) + 1:]}"
+    return entity_id
+
+
 def parametrize(mapping: dict[str, str], prefix: str) -> dict[str, str]:
     """Zamień entity_id na szablony z ``{prefix}`` tam, gdzie pasuje prefiks.
 
     Encje nie zaczynające się od ``{prefix}_`` zostają dosłowne (przypadek
     niejednolitego nazewnictwa — wymaga ręcznego przeglądu przy dodawaniu profilu).
     """
-    out: dict[str, str] = {}
-    for key, entity_id in mapping.items():
-        if not entity_id or "." not in entity_id:
-            out[key] = entity_id
-            continue
-        domain, object_id = entity_id.split(".", 1)
-        if prefix and object_id.startswith(prefix + "_"):
-            out[key] = f"{domain}.{{prefix}}_{object_id[len(prefix) + 1:]}"
-        else:
-            out[key] = entity_id
-    return out
+    return {key: parametrize_entity(entity_id, prefix) for key, entity_id in mapping.items()}
 
 
 def build_profile_draft(
@@ -100,6 +100,81 @@ def build_profile_draft(
         "control_template": control_template,
         "literal_entities": literal,
         "file_path": f"profiles/{_slug(source)}/{_slug(manufacturer)}_{_slug(model)}.py",
+    }
+
+
+def build_export(
+    *,
+    env: dict[str, Any],
+    meta: dict[str, Any],
+    capabilities: dict[str, bool],
+    read_mapping: dict[str, str],
+    control_mapping: dict[str, str],
+    control_extra: list[str],
+    notes: str,
+    get_snapshot: Callable[[str], dict[str, Any]],
+    canonical_type: Callable[[str], str | None],
+    canonical_values: Callable[[str], list[str] | None],
+) -> dict[str, Any]:
+    """Złóż pełny eksport profilu w formacie kontraktu (patrz TODO/FORMAT_eksportu_profilu.md).
+
+    Czyste — snapshoty encji i resolvery kanoniczne wstrzykiwane jako callable, żeby dało
+    się testować bez Home Assistant.
+    """
+    prefix = meta.get("prefix", "")
+    unparametrized: list[str] = []
+
+    def make_entry(entity_raw: str, knob: str, with_canonical: bool) -> dict[str, Any]:
+        template = parametrize_entity(entity_raw, prefix)
+        if "{prefix}" not in template:
+            unparametrized.append(knob)
+        values = canonical_values(knob) if with_canonical else None
+        return {
+            "entity": template,
+            "entity_raw": entity_raw,
+            "canonical_type": canonical_type(knob) if with_canonical else None,
+            "canonical_values": list(values) if values else None,
+            "snapshot": get_snapshot(entity_raw),
+        }
+
+    read = {k: make_entry(v, k, False) for k, v in read_mapping.items() if v}
+    control = {k: make_entry(v, k, True) for k, v in control_mapping.items() if v}
+    extra = [
+        {
+            "entity": parametrize_entity(eid, prefix),
+            "entity_raw": eid,
+            "snapshot": get_snapshot(eid),
+        }
+        for eid in control_extra
+        if eid
+    ]
+
+    profile_id = "_".join(_slug(p) for p in (meta["manufacturer"], meta["model"], meta["source"]))
+    file_path = (
+        f"profiles/{_slug(meta['source'])}/"
+        f"{_slug(meta['manufacturer'])}_{_slug(meta['model'])}.py"
+    )
+
+    return {
+        "format_version": env["format_version"],
+        "generated_at": env["generated_at"],
+        "integration_version": env["integration_version"],
+        "ha_version": env["ha_version"],
+        "device": {
+            "manufacturer": meta["manufacturer"],
+            "model": meta["model"],
+            "source": meta["source"],
+            "prefix": prefix,
+            "control_model": meta.get("control_model"),
+            "profile_id": profile_id,
+            "file_path": file_path,
+        },
+        "capabilities": {k: bool(v) for k, v in capabilities.items() if v},
+        "read": read,
+        "control": control,
+        "control_extra": extra,
+        "unparametrized": sorted(set(unparametrized)),
+        "notes": notes or "",
     }
 
 
