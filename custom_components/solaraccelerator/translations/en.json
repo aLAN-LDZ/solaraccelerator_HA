@@ -350,10 +350,12 @@
         "title": "Inverter work mode",
         "description": "Map the entities used to control the inverter (optional). The list shows only entities of the matching type. Leave empty if your inverter doesn't have a given function.",
         "data": {
-          "work_mode": "Inverter work mode (select)"
+          "work_mode": "Inverter work mode (select)",
+          "work_mode__fanout": "Work mode split across several entities (fan-out)"
         },
         "data_description": {
-          "work_mode": "A select entity with the inverter work mode (e.g. Selling First / Zero Export to Load)."
+          "work_mode": "A select entity with the inverter work mode (e.g. Selling First / Zero Export to Load).",
+          "work_mode__fanout": "Tick if the mode is set by several switches instead of one select. Leave the single entity above empty — you'll pick the entities in the next step."
         }
       },
       "control_battery": {
@@ -372,10 +374,12 @@
         "title": "Grid control",
         "description": "Map the entities used to control the inverter (optional). The list shows only entities of the matching type. Leave empty if your inverter doesn't have a given function.",
         "data": {
-          "grid_peak_shaving": "Grid peak shaving — on/off toggle (switch)"
+          "grid_peak_shaving": "Grid peak shaving — on/off toggle (switch)",
+          "grid_peak_shaving__fanout": "Peak shaving split across several entities (fan-out)"
         },
         "data_description": {
-          "grid_peak_shaving": "A switch entity that turns grid peak shaving on/off. This is an on/off toggle, NOT a power value."
+          "grid_peak_shaving": "A switch entity that turns grid peak shaving on/off. This is an on/off toggle, NOT a power value.",
+          "grid_peak_shaving__fanout": "Tick if the function is engaged by several switches at once. Leave the single entity above empty — you'll pick the entities in the next step."
         }
       },
       "control_pv": {
@@ -395,6 +399,7 @@
           "tou_1_time": "Slot 1: start time (time)",
           "tou_1_soc": "Slot 1: target SOC [%] (number)",
           "tou_1_charge_mode": "Slot 1: charge mode (select)",
+          "tou_1_charge_mode__fanout": "Charge mode split across several entities (fan-out)",
           "tou_2_time": "Slot 2: start time (time)",
           "tou_2_soc": "Slot 2: target SOC [%] (number)",
           "tou_2_charge_mode": "Slot 2: charge mode (select)",
@@ -415,6 +420,7 @@
           "tou_1_time": "A time entity — start time of schedule slot 1.",
           "tou_1_soc": "A number entity — target battery SOC in slot 1 (percent).",
           "tou_1_charge_mode": "A select entity — charge source in slot 1 (e.g. Grid / Generator / Off).",
+          "tou_1_charge_mode__fanout": "Tick if the charge source is set by several switches (separate grid and generator) instead of one select. You'll pick the entities in the next step.",
           "tou_2_time": "A time entity — start time of schedule slot 2.",
           "tou_2_soc": "A number entity — target battery SOC in slot 2 (percent).",
           "tou_2_charge_mode": "A select entity — charge source in slot 2 (e.g. Grid / Generator / Off).",
@@ -432,11 +438,16 @@
           "tou_6_charge_mode": "A select entity — charge source in slot 6 (e.g. Grid / Generator / Off)."
         }
       },
-      "control_extra": {
-        "title": "Additional control entities",
-        "description": "Pick control entities that didn't fit any field above — e.g. a second charge-mode switch (separate grid and gen). We'll assemble them into the profile.",
+      "control_fanout": {
+        "title": "Split across several entities (fan-out)",
+        "description": "The \"{knob}\" knob is split across several switches on your setup. For each state, pick the entities that are ON in it (e.g. \"grid\" → the grid-charging switch, \"both\" → both switches). An entity left out of every state stays off. Knobs left to configure: {remaining}.",
         "data": {
-          "control_extra": "Additional entities"
+          "on_grid": "On in state \"grid\" (charge from grid)",
+          "on_gen": "On in state \"gen\" (charge from generator)",
+          "on_both": "On in state \"both\" (grid + generator)",
+          "on_on": "On when the function is active",
+          "on_export_first": "On in mode \"export_first\"",
+          "on_zero_export_to_load": "On in mode \"zero_export_to_load\""
         }
       }
     },

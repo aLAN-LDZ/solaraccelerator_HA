@@ -350,10 +350,12 @@
         "title": "Tryb pracy inwertera",
         "description": "Zmapuj encje, którymi steruje się falownikiem (opcjonalnie). Lista pokazuje tylko encje właściwego typu. Zostaw puste, jeśli Twój falownik danej funkcji nie ma.",
         "data": {
-          "work_mode": "Tryb pracy falownika (select)"
+          "work_mode": "Tryb pracy falownika (select)",
+          "work_mode__fanout": "Tryb pracy rozbity na kilka encji (fan-out)"
         },
         "data_description": {
-          "work_mode": "Encja select z trybem pracy falownika (np. Selling First / Zero Export to Load)."
+          "work_mode": "Encja select z trybem pracy falownika (np. Selling First / Zero Export to Load).",
+          "work_mode__fanout": "Zaznacz, jeśli zamiast jednego selecta tryb ustawia się kilkoma przełącznikami. Pojedynczą encję wyżej zostaw pustą — encje podasz w kolejnym kroku."
         }
       },
       "control_battery": {
@@ -372,10 +374,12 @@
         "title": "Sterowanie siecią",
         "description": "Zmapuj encje, którymi steruje się falownikiem (opcjonalnie). Lista pokazuje tylko encje właściwego typu. Zostaw puste, jeśli Twój falownik danej funkcji nie ma.",
         "data": {
-          "grid_peak_shaving": "Peak shaving z sieci — włącznik on/off (switch)"
+          "grid_peak_shaving": "Peak shaving z sieci — włącznik on/off (switch)",
+          "grid_peak_shaving__fanout": "Peak shaving rozbity na kilka encji (fan-out)"
         },
         "data_description": {
-          "grid_peak_shaving": "Encja switch włączająca/wyłączająca peak shaving z sieci. To przełącznik on/off, NIE wartość mocy."
+          "grid_peak_shaving": "Encja switch włączająca/wyłączająca peak shaving z sieci. To przełącznik on/off, NIE wartość mocy.",
+          "grid_peak_shaving__fanout": "Zaznacz, jeśli funkcję włącza się kilkoma przełącznikami naraz. Pojedynczą encję wyżej zostaw pustą — encje podasz w kolejnym kroku."
         }
       },
       "control_pv": {
@@ -395,6 +399,7 @@
           "tou_1_time": "Slot 1: godzina startu (time)",
           "tou_1_soc": "Slot 1: docelowy SOC [%] (number)",
           "tou_1_charge_mode": "Slot 1: tryb ładowania (select)",
+          "tou_1_charge_mode__fanout": "Tryb ładowania rozbity na kilka encji (fan-out)",
           "tou_2_time": "Slot 2: godzina startu (time)",
           "tou_2_soc": "Slot 2: docelowy SOC [%] (number)",
           "tou_2_charge_mode": "Slot 2: tryb ładowania (select)",
@@ -415,6 +420,7 @@
           "tou_1_time": "Encja time — godzina rozpoczęcia slotu 1 harmonogramu.",
           "tou_1_soc": "Encja number — docelowy SOC baterii w slocie 1 (procent).",
           "tou_1_charge_mode": "Encja select — źródło ładowania w slocie 1 (np. Sieć / Generator / Wyłączone).",
+          "tou_1_charge_mode__fanout": "Zaznacz, jeśli źródło ładowania ustawia się kilkoma przełącznikami (osobno sieć i generator) zamiast jednym selectem. Encje podasz w kolejnym kroku.",
           "tou_2_time": "Encja time — godzina rozpoczęcia slotu 2 harmonogramu.",
           "tou_2_soc": "Encja number — docelowy SOC baterii w slocie 2 (procent).",
           "tou_2_charge_mode": "Encja select — źródło ładowania w slocie 2 (np. Sieć / Generator / Wyłączone).",
@@ -432,11 +438,16 @@
           "tou_6_charge_mode": "Encja select — źródło ładowania w slocie 6 (np. Sieć / Generator / Wyłączone)."
         }
       },
-      "control_extra": {
-        "title": "Dodatkowe encje sterujące",
-        "description": "Wskaż encje sterujące, które nie pasowały do żadnej pozycji wyżej — np. drugi przełącznik trybu ładowania (osobny grid i gen). Złożymy z nich profil.",
+      "control_fanout": {
+        "title": "Rozbicie na kilka encji (fan-out)",
+        "description": "Knob „{knob}\" jest u Ciebie rozbity na kilka przełączników. Dla każdego stanu wskaż encje, które są w nim WŁĄCZONE (np. „grid\" → przełącznik ładowania z sieci, „both\" → oba przełączniki). Encja pominięta we wszystkich stanach pozostaje wyłączona. Pozostało knobów do skonfigurowania: {remaining}.",
         "data": {
-          "control_extra": "Dodatkowe encje"
+          "on_grid": "Włączone w stanie „grid\" (ładowanie z sieci)",
+          "on_gen": "Włączone w stanie „gen\" (ładowanie z generatora)",
+          "on_both": "Włączone w stanie „both\" (sieć + generator)",
+          "on_on": "Włączone, gdy funkcja aktywna",
+          "on_export_first": "Włączone w trybie „export_first\"",
+          "on_zero_export_to_load": "Włączone w trybie „zero_export_to_load\""
         }
       }
     },

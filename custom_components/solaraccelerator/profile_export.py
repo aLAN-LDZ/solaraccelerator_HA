@@ -11,6 +11,7 @@ oficjalnego wsparcia.
 """
 from __future__ import annotations
 
+import json
 import re
 from typing import Any, Callable
 
@@ -62,6 +63,41 @@ def parametrize(mapping: dict[str, str], prefix: str) -> dict[str, str]:
     return {key: parametrize_entity(entity_id, prefix) for key, entity_id in mapping.items()}
 
 
+def _is_fanout(value: Any) -> bool:
+    """Czy wartość sterująca to spec fan-out (knob → wiele encji), a nie pojedyncza encja."""
+    return isinstance(value, dict) and "fanout" in value
+
+
+def _value_template_entities(value: Any) -> list[str]:
+    """Szablony encji wynikające z wartości sterującej (string → jeden, fan-out → wiele).
+
+    Używane do wykrycia encji, których nie udało się sparametryzować prefiksem.
+    """
+    if _is_fanout(value):
+        return [t.get("entity", "") for t in value["fanout"]]
+    return [value or ""]
+
+
+def parametrize_control_value(value: Any, prefix: str) -> Any:
+    """Sparametryzuj wartość sterującą: pojedynczą encję (string) lub spec fan-out (dict).
+
+    Dla fan-outu parametryzuje encję każdego celu, zachowując ``on_when``.
+    """
+    if _is_fanout(value):
+        return {
+            "fanout": [
+                {**target, "entity": parametrize_entity(target.get("entity", ""), prefix)}
+                for target in value["fanout"]
+            ]
+        }
+    return parametrize_entity(value, prefix)
+
+
+def parametrize_control(mapping: dict[str, Any], prefix: str) -> dict[str, Any]:
+    """Sparametryzuj mapę sterowania (wartości: string lub spec fan-out)."""
+    return {key: parametrize_control_value(value, prefix) for key, value in mapping.items()}
+
+
 def build_profile_draft(
     *,
     manufacturer: str,
@@ -79,12 +115,12 @@ def build_profile_draft(
       (niejednolite nazewnictwo — do ręcznego sprawdzenia).
     """
     read_template = parametrize(read_mapping, prefix)
-    control_template = parametrize(control_mapping, prefix)
+    control_template = parametrize_control(control_mapping, prefix)
 
     literal = sorted(
         key
         for key, value in {**read_template, **control_template}.items()
-        if "{prefix}" not in (value or "")
+        if any("{prefix}" not in (entity or "") for entity in _value_template_entities(value))
     )
 
     profile_id = "_".join(_slug(p) for p in (manufacturer, model, source))
@@ -137,8 +173,32 @@ def build_export(
             "snapshot": get_snapshot(entity_raw),
         }
 
+    def make_control_entry(knob: str, value: Any) -> dict[str, Any]:
+        """Wpis sterowania: pojedyncza encja albo fan-out (knob → wiele encji bool)."""
+        if not _is_fanout(value):
+            return make_entry(value, knob, True)
+        targets: list[dict[str, Any]] = []
+        for target in value["fanout"]:
+            entity_raw = target.get("entity", "")
+            template = parametrize_entity(entity_raw, prefix)
+            if "{prefix}" not in template:
+                unparametrized.append(knob)
+            targets.append({
+                "entity": template,
+                "entity_raw": entity_raw,
+                "on_when": list(target.get("on_when", [])),
+                "snapshot": get_snapshot(entity_raw),
+            })
+        values = canonical_values(knob)
+        return {
+            "entity": None,
+            "fanout": targets,
+            "canonical_type": canonical_type(knob),
+            "canonical_values": list(values) if values else None,
+        }
+
     read = {k: make_entry(v, k, False) for k, v in read_mapping.items() if v}
-    control = {k: make_entry(v, k, True) for k, v in control_mapping.items() if v}
+    control = {k: make_control_entry(k, v) for k, v in control_mapping.items() if v}
     extra = [
         {
             "entity": parametrize_entity(eid, prefix),
@@ -178,13 +238,24 @@ def build_export(
     }
 
 
-def _render_template_dict(name: str, mapping: dict[str, str]) -> str:
+def _render_control_value(value: Any) -> str:
+    """Wyrenderuj wartość szablonu jako literał Pythona.
+
+    Spec fan-out (dict) zawiera tylko stringi i listy stringów, więc ``json.dumps``
+    daje poprawny składniowo literał Pythona (cudzysłowy podwójne, listy).
+    """
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
+    return f'"{value}"'
+
+
+def _render_template_dict(name: str, mapping: dict[str, Any]) -> str:
     """Wyrenderuj słownik szablonu jako wcięty blok Pythona."""
     if not mapping:
         return f"    {name}={{}},"
     lines = [f"    {name}={{"]
     for key, value in mapping.items():
-        lines.append(f'        "{key}": "{value}",')
+        lines.append(f'        "{key}": {_render_control_value(value)},')
     lines.append("    },")
     return "\n".join(lines)
 

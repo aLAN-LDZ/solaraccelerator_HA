@@ -65,6 +65,7 @@ from .const import (
     EV_ENTITY_KEYS,
 )
 from . import contract
+from . import inverters
 from .profile_export import build_profile_draft, detect_prefix
 from .profiles import (
     ROLE_EV_CHARGER,
@@ -91,6 +92,21 @@ CONTROL_ENTITY_DOMAINS = [
     "time",
     "input_datetime",
 ]
+
+# Knoby tego typu (enum/bool — w UI selecty i switche) bywają na danym falowniku rozbite
+# na kilka encji (fan-out). Tylko dla nich pokazujemy checkbox „rozbite na kilka encji".
+FANOUT_VALUE_TYPES = {"select", "switch"}
+
+# Cele fan-outu to zawsze encje przełączane (każdy cel jest włączany w wybranych stanach).
+FANOUT_TARGET_DOMAINS = ["switch", "input_boolean"]
+
+# Sufiks pola checkboxa fan-out dokładanego do knoba w krokach mapowania sterowania.
+FANOUT_FLAG_SUFFIX = "__fanout"
+
+
+def _is_fanout(value: Any) -> bool:
+    """Czy zapisana wartość knoba to spec fan-out (dict), a nie pojedyncza encja (string)."""
+    return isinstance(value, dict) and "fanout" in value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -571,6 +587,12 @@ class SolarAcceleratorOptionsFlow(config_entries.OptionsFlow):
         )
         # Szkic profilu (kreator "Zgłoś / eksportuj profil") — wczytaj, by edycja wznawiała.
         self._profile: dict[str, Any] = dict(config_entry.options.get(CONF_PROFILE_DRAFT, {}))
+        # Stare szkice mogły trzymać luźną listę „control_extra"; encje rozbicia są teraz
+        # częścią knoba (fan-out), więc nie przenosimy jej dalej.
+        self._profile.pop("control_extra", None)
+        # Kolejka knobów oznaczonych jako fan-out, obsługiwana w pod-krokach control_fanout.
+        self._fanout_queue: list[str] = []
+        self._fanout_next_step: str = "profile_summary"
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Menu: sterowalne odbiorniki + kreator zgłoszenia profilu. Każda akcja zapisuje
@@ -774,28 +796,50 @@ class SolarAcceleratorOptionsFlow(config_entries.OptionsFlow):
         Selektor pokazuje encje wielu typów (sterowanie bywa wystawione jako number/
         select/switch/time itd. zależnie od integracji) — kodek dobierze się później ze
         snapshotu. Dla TOU pytamy tylko o slot 1; sloty 2–6 generuje skrypt z wzorca.
+
+        Knoby enum/bool mają dodatkowy checkbox „rozbite na kilka encji". Zaznaczenie
+        kieruje knob do pod-kroku ``control_fanout`` (gdzie podajemy parę encji zamiast
+        jednej), zamiast zapisywać pojedynczą encję z tego ekranu.
         """
         controls = contract.controls_for_category(category)
         if category == "schedule":
             controls = [c for c in controls if c[0].startswith("tou_1_")]
-        current: dict[str, str] = dict(self._profile.get("control_mapping", {}))
+        current: dict[str, Any] = dict(self._profile.get("control_mapping", {}))
 
         if user_input is not None:
-            for key, _label, _vt, _cat in controls:
+            fanout_knobs: list[str] = []
+            for key, _label, value_type, _cat in controls:
+                wants_fanout = (
+                    value_type in FANOUT_VALUE_TYPES
+                    and bool(user_input.get(f"{key}{FANOUT_FLAG_SUFFIX}"))
+                )
+                if wants_fanout:
+                    fanout_knobs.append(key)
+                    # Spec fan-out powstaje w pod-kroku; nie nadpisujemy go pojedynczą encją.
+                    if not _is_fanout(current.get(key)):
+                        current.pop(key, None)
+                    continue
                 value = user_input.get(key)
                 if value:
                     current[key] = value
                 else:
                     current.pop(key, None)
             self._profile["control_mapping"] = current
+            if fanout_knobs:
+                self._fanout_queue = fanout_knobs
+                self._fanout_next_step = next_step
+                return await self.async_step_control_fanout()
             return await getattr(self, f"async_step_{next_step}")()
 
         schema_dict: dict[Any, Any] = {}
-        for key, _label, _vt, _cat in controls:
-            default = current.get(key, vol.UNDEFINED)
+        for key, _label, value_type, _cat in controls:
+            existing = current.get(key)
+            default = existing if isinstance(existing, str) else vol.UNDEFINED
             schema_dict[vol.Optional(key, default=default)] = EntitySelector(
                 EntitySelectorConfig(domain=CONTROL_ENTITY_DOMAINS)
             )
+            if value_type in FANOUT_VALUE_TYPES:
+                schema_dict[vol.Optional(f"{key}{FANOUT_FLAG_SUFFIX}", default=_is_fanout(existing))] = bool
 
         return self.async_show_form(
             step_id=f"control_{category}",
@@ -816,23 +860,94 @@ class SolarAcceleratorOptionsFlow(config_entries.OptionsFlow):
         return await self._async_step_control("pv", "control_schedule", user_input)
 
     async def async_step_control_schedule(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        return await self._async_step_control("schedule", "control_extra", user_input)
+        return await self._async_step_control("schedule", "profile_summary", user_input)
 
-    async def async_step_control_extra(
+    def _canonical_values(self, knob: str) -> tuple[str, ...] | None:
+        """Kanoniczne wartości enuma dla knoba wg modelu falownika (lub ``None``)."""
+        model_mod = inverters.resolve(
+            self._profile.get("manufacturer", ""), self._profile.get("model", "")
+        )
+        return model_mod.canonical_values(knob) if model_mod else None
+
+    @staticmethod
+    def _fanout_states(values: tuple[str, ...] | None) -> list[str]:
+        """Stany, dla których pytamy o włączone encje (pomijamy „off" — tam nic nie świeci).
+
+        Dla enuma to jego wartości; gdy modelu nie znamy (lub knob bool), pytamy o jeden
+        stan „on".
+        """
+        states = list(values) if values else ["on"]
+        return [s for s in states if s != "off"]
+
+    async def async_step_control_fanout(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Dodatkowe encje sterujące spoza knobów (np. drugi switch fan-outu)."""
-        if user_input is not None:
-            self._profile["control_extra"] = user_input.get("control_extra", []) or []
-            return await self.async_step_profile_summary()
+        """Pod-krok fan-outu: knob rozbity na kilka encji przełączanych.
 
-        default = self._profile.get("control_extra", [])
-        schema = vol.Schema({
-            vol.Optional("control_extra", default=default): EntitySelector(
-                EntitySelectorConfig(domain=CONTROL_ENTITY_DOMAINS, multiple=True)
-            ),
-        })
-        return self.async_show_form(step_id="control_extra", data_schema=schema)
+        Dla każdego kanonicznego stanu (np. grid / gen / both) użytkownik wskazuje, które
+        encje są w nim WŁĄCZONE. Z tego składamy listę celów: każda encja + zbiór stanów,
+        w których jest włączona (``on_when``). Obsługujemy po jednym knobie z kolejki.
+        """
+        if not self._fanout_queue:
+            return await getattr(self, f"async_step_{self._fanout_next_step}")()
+
+        knob = self._fanout_queue[0]
+        values = self._canonical_values(knob)
+        states = self._fanout_states(values)
+        current: dict[str, Any] = dict(self._profile.get("control_mapping", {}))
+
+        if user_input is not None:
+            targets = self._build_fanout_targets(states, user_input)
+            if targets:
+                current[knob] = {"fanout": targets}
+            else:
+                current.pop(knob, None)
+            self._profile["control_mapping"] = current
+            self._fanout_queue = self._fanout_queue[1:]
+            return await self.async_step_control_fanout()
+
+        existing = current.get(knob)
+        existing_targets = existing["fanout"] if _is_fanout(existing) else []
+        schema_dict: dict[Any, Any] = {}
+        for state in states:
+            default = [
+                t["entity"] for t in existing_targets if state in t.get("on_when", [])
+            ]
+            schema_dict[vol.Optional(f"on_{state}", default=default)] = EntitySelector(
+                EntitySelectorConfig(domain=FANOUT_TARGET_DOMAINS, multiple=True)
+            )
+
+        return self.async_show_form(
+            step_id="control_fanout",
+            data_schema=vol.Schema(schema_dict),
+            description_placeholders={
+                "knob": self._knob_label(knob),
+                "remaining": str(len(self._fanout_queue) - 1),
+            },
+        )
+
+    @staticmethod
+    def _build_fanout_targets(states: list[str], user_input: dict[str, Any]) -> list[dict[str, Any]]:
+        """Zbuduj listę celów fan-outu z formularza „stan → włączone encje".
+
+        Odwraca relację: dla każdej encji zbiera stany, w których jest włączona (``on_when``).
+        Kolejność stanów zachowana, encje w kolejności pierwszego wystąpienia.
+        """
+        on_when: dict[str, list[str]] = {}
+        for state in states:
+            for entity_id in user_input.get(f"on_{state}", []) or []:
+                on_when.setdefault(entity_id, [])
+                if state not in on_when[entity_id]:
+                    on_when[entity_id].append(state)
+        return [{"entity": entity_id, "on_when": ow} for entity_id, ow in on_when.items()]
+
+    @staticmethod
+    def _knob_label(knob: str) -> str:
+        """Czytelna etykieta knoba z kontraktu (do opisu pod-kroku)."""
+        for key, label, _vt, _cat in contract.CONTROL_CAPABILITIES:
+            if key == knob:
+                return label
+        return knob
 
     async def async_step_profile_summary(
         self, user_input: dict[str, Any] | None = None
