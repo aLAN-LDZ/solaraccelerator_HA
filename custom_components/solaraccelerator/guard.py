@@ -12,7 +12,9 @@ później falownik cicho zresetował ustawienie — i plan nie jest realizowany.
 Jak działa guard
 ----------------
 1. Po każdej komendzie z backendu ``write_manager`` woła ``register_many`` —
-   guard zapamiętuje "stan docelowy" każdej sterowanej encji.
+   guard zapamiętuje "stan docelowy" sterowanych encji. Pilnuje TYLKO encji
+   falownika; dodatkowe sterowalne odbiorniki (``controllable_devices``) są
+   pomijane — ich stanem steruje użytkownik/backend na bieżąco.
 2. Guard pilnuje tych encji DWOMA mechanizmami:
    a) **zdarzeniowo** — nasłuchuje ``state_changed`` i reaguje natychmiast gdy
       encja odejdzie od planu,
@@ -36,7 +38,9 @@ Wyłączenie
 ----------
 Przełącznik "Pilnuj ustawień" (switch.py) ustawia ``coordinator_data`` →
 ``DATA_GUARD_ENABLED``. Gdy OFF, guard nie przywraca wartości (sweep i zdarzenia
-kończą się wcześnie). Domyślnie ON — plan egzekwowany od razu po instalacji.
+kończą się wcześnie), a ``write_manager`` porzuca korekty, które zdążyły już
+trafić do kolejki — więc wyłączenie zatrzymuje wymuszanie natychmiast.
+Domyślnie ON — plan egzekwowany od razu po instalacji.
 """
 from __future__ import annotations
 
@@ -50,7 +54,12 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 
-from .const import DATA_GUARD_ENABLED, DEFAULT_GUARD_ENABLED, GUARD_SWEEP_INTERVAL
+from .const import (
+    CONF_CONTROLLABLE_DEVICES,
+    DATA_GUARD_ENABLED,
+    DEFAULT_GUARD_ENABLED,
+    GUARD_SWEEP_INTERVAL,
+)
 from .helpers import state_matches_expected
 
 _LOGGER = logging.getLogger(__name__)
@@ -101,17 +110,25 @@ class SettingsGuard:
         return bool(self.coordinator_data.get(DATA_GUARD_ENABLED, DEFAULT_GUARD_ENABLED))
 
     def register_many(self, commands: list[dict[str, Any]]) -> None:
-        """Zapamiętaj docelowy stan encji z batcha komend backendu.
+        """Zapamiętaj docelowy stan encji falownika z batcha komend backendu.
 
         Wołane przez ``write_manager`` po przetworzeniu batcha. Rejestrujemy każdą
         komendę (też tę z nieudanym verify — chcemy DALEJ dążyć do planu).
         Świeży plan z backendu czyści ``_pending`` dla tych encji.
+
+        Pilnujemy TYLKO encji falownika. Dodatkowe sterowalne odbiorniki
+        (``controllable_devices`` — bojlery, klimatyzacja, ładowarki jako zwykłe
+        switche) są pomijane: ich stanem steruje sam użytkownik/backend na bieżąco
+        i nie chcemy przywracać ich do wcześniejszej wartości.
         """
+        excluded = self._controllable_entity_ids()
         added = False
         for cmd in commands:
             entity_id = cmd.get("entity_id")
             service = cmd.get("service")
             if not entity_id or not service:
+                continue
+            if entity_id in excluded:
                 continue
             if entity_id not in self._desired:
                 added = True
@@ -139,6 +156,22 @@ class SettingsGuard:
     def clear_pending(self) -> None:
         """Wyczyść znaczniki korekt w locie (np. przy wyłączeniu przełącznika)."""
         self._pending.clear()
+
+    def _controllable_entity_ids(self) -> set[str]:
+        """Zbierz encje dodatkowych sterowalnych odbiorników — ich NIE pilnujemy.
+
+        Lista pochodzi z OptionsFlow (``CONF_CONTROLLABLE_DEVICES``). Bierzemy
+        wszystkie encje wpisu (switch + sensory mocy/energii/statusu), bo żadna z
+        nich nie jest encją falownika — to zwykłe odbiorniki, których stanem nie
+        zarządza guard.
+        """
+        devices = self.coordinator_data.get(CONF_CONTROLLABLE_DEVICES) or []
+        ids: set[str] = set()
+        for dev in devices:
+            for field in ("switch_entity", "power_sensor", "energy_sensor", "status_entity"):
+                if eid := dev.get(field):
+                    ids.add(eid)
+        return ids
 
     # === Wewnętrzne: nasłuch + enforcement ===
 

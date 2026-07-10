@@ -165,13 +165,31 @@ class WriteManager:
             len(batch), command_delay, verify_settling, verify_retries,
         )
 
+        guard = self.coordinator_data.get("settings_guard")
+
+        # Krok -1: jeśli "Pilnuj ustawień" zostało wyłączone, porzuć korekty guarda,
+        # które zdążyły trafić do kolejki zanim przełącznik poszedł na OFF (np. cały
+        # urodzaj z ostatniego sweepu). Bez tego worker wykonałby je mimo wyłączenia i
+        # użytkownik widziałby dalsze wymuszanie planu. Komendy z backendu (z ``id``)
+        # przepuszczamy normalnie — to nie jest pilnowanie, tylko bieżące sterowanie.
+        if guard and not guard.is_enabled():
+            dropped = [c for c in batch if c.get("guard")]
+            if dropped:
+                for c in dropped:
+                    guard.on_correction_processed(c.get("entity_id"))
+                batch = [c for c in batch if not c.get("guard")]
+                _LOGGER.debug(
+                    "Pilnuj ustawień wyłączone — porzucono %d zakolejkowanych korekt", len(dropped)
+                )
+                if not batch:
+                    return
+
         # Krok 0: "pilnuj ustawień" — zarejestruj docelowe stany encji z backendu
         # PRZED wykonaniem zapisów. Inaczej write z tego batcha wywoła ``state_changed``,
         # a guard — mając w ``_desired`` jeszcze STARĄ wartość z poprzedniej godziny —
         # zareagowałby natychmiast i zakolejkował korektę cofającą do starego planu.
         # Rejestrując najpierw, guard widzi nowy cel i nie cofa świeżego ustawienia.
         # Korekty samego guarda (flaga ``guard``) pomijamy — dotyczą encji już pilnowanych.
-        guard = self.coordinator_data.get("settings_guard")
         if guard:
             guard.register_many([c for c in batch if not c.get("guard")])
 
