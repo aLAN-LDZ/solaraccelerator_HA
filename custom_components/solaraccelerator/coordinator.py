@@ -19,6 +19,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from .api import (
     async_check_data_ready,
@@ -67,6 +68,13 @@ async def async_send_data_hourly(
             )
 
             await asyncio.sleep(seconds_to_wait)
+
+            # sleep potrafi obudzić się ułamek sekundy PRZED pełną godziną (dryf
+            # zegara systemowego). Dosypiamy do faktycznej pełnej godziny — inaczej
+            # paczka ma znacznik HH:59:59 i pętla wysyła tę samą godzinę dwa razy.
+            # Limit 60 s: dosypiamy tylko krótki brak, większej różnicy nie ruszamy.
+            while 0 < (remaining := (next_scheduled - dt_util.utcnow()).total_seconds()) < 60:
+                await asyncio.sleep(remaining)
 
             # Krok 1: wyślij paczkę i od razu pobierz ceny (równolegle, bez czekania)
             send_success = await async_send_data(hass, coordinator_data)
